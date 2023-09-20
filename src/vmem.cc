@@ -23,6 +23,13 @@
 #include "dram_controller.h"
 #include <fmt/core.h>
 
+uint64_t VirtualMemory::virtual_seed = 0;
+
+void VirtualMemory::set_virtual_seed(uint64_t v_seed)
+{
+  virtual_seed = v_seed;
+}
+
 VirtualMemory::VirtualMemory(uint64_t page_table_page_size, std::size_t page_table_levels, uint64_t minor_penalty, MEMORY_CONTROLLER& dram)
     : next_ppage(VMEM_RESERVE_CAPACITY), last_ppage(1ull << (LOG2_PAGE_SIZE + champsim::lg2(page_table_page_size / PTE_BYTES) * page_table_levels)),
       minor_fault_penalty(minor_penalty), pt_levels(page_table_levels), pte_page_size(page_table_page_size)

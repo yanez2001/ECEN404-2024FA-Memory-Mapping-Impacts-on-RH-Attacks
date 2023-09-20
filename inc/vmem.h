@@ -44,6 +44,7 @@ private:
   void ppage_pop();
 
 public:
+  static uint64_t virtual_seed;
   const uint64_t minor_fault_penalty;
   const std::size_t pt_levels;
   const uint64_t pte_page_size; // Size of a PTE page
@@ -55,6 +56,7 @@ public:
   std::size_t available_ppages() const;
   std::pair<uint64_t, uint64_t> va_to_pa(uint32_t cpu_num, uint64_t vaddr);
   std::pair<uint64_t, uint64_t> get_pte_pa(uint32_t cpu_num, uint64_t vaddr, std::size_t level);
+    static void set_virtual_seed(uint64_t v_seed);
 };
 
 #endif

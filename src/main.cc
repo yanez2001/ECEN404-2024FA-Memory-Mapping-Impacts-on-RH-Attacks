@@ -44,6 +44,10 @@ int main(int argc, char** argv)
   bool knob_cloudsuite{false};
   uint64_t warmup_instructions = 0;
   uint64_t simulation_instructions = std::numeric_limits<uint64_t>::max();
+  long long virtual_seed = 0;
+  long long target_row = 0;
+  long long target_cycle = 0;
+  std::string hammer_file = "hammer";
   std::string json_file_name;
   std::vector<std::string> trace_names;
 
@@ -62,6 +66,14 @@ int main(int argc, char** argv)
   auto deprec_sim_instr_option =
       app.add_option("--simulation_instructions", simulation_instructions, "[deprecated] use --simulation-instructions instead")->excludes(sim_instr_option);
 
+  auto* virtual_seed_option = app.add_option("-v,--virtual-seed",virtual_seed,"The seed used to generate the page table mappings. 0 disables randomization");
+
+  auto* target_row_option = app.add_option("-r,--target-row",target_row,"The target row for memory outputs");
+
+  auto* target_cycle_option = app.add_option("-s, --target-cycle",target_cycle,"The target cycle for hammer counting reset");
+
+  auto* hammer_file_option = app.add_option("-o, --hammer-output-file",hammer_file,"The output file for hammer data");
+  
   auto json_option =
       app.add_option("--json", json_file_name, "The name of the file to receive JSON output. If no name is specified, stdout will be used")->expected(0, 1);
 
@@ -80,6 +92,23 @@ int main(int argc, char** argv)
 
   if (simulation_given && !warmup_given)
     warmup_instructions = simulation_instructions * 2 / 10;
+    
+  if(virtual_seed_option->count() > 0)
+  {
+    VirtualMemory::set_virtual_seed(virtual_seed);
+  }
+  if(target_row_option->count() > 0)
+  {
+    HammerCounter::set_target_row(target_row);
+  }
+  if(target_cycle_option->count() > 0)
+  {
+    HammerCounter::set_target_cycle(target_cycle);
+  }
+  if(hammer_file_option->count() > 0)
+  {
+    HammerCounter::set_output_file(hammer_file);
+  }
 
   std::vector<champsim::tracereader> traces;
   std::transform(
