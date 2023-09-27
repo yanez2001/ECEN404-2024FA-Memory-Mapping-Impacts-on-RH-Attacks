@@ -15,7 +15,6 @@
 #define RH_READ 0
 #define RH_WRITE 1
 #define RH_REFRESH 2
-#define CPU_FREQ 4000
 class Address
 {
 public:
@@ -37,24 +36,39 @@ public:
 
   bool operator<(const Address& a) const { return (addr < a.addr); }
 };
-
-struct Count {
+struct HighestCount
+{
+  uint64_t hammer_count;
+  uint64_t prefetch_hammer_count;
+  uint64_t write_back_count;
+  uint64_t normal_hammer_count;
+  bool truncated_by_refresh;
+  uint64_t start_cycle;
+  bool hammered_besides_refresh;
+  HighestCount();
+};
+struct LifetimeCount
+{
   uint64_t lost_hammers_to_refresh;
   uint64_t lost_hammers_to_access;
 
   uint64_t total_hammers;
   uint64_t normal_hammers;
   uint64_t prefetch_hammers;
+  uint64_t write_back_hammers;
 
-  uint64_t highest_hammer_count;
-  uint64_t highest_prefetch_hammer_count;
-  uint64_t highest_normal_hammer_count;
+  bool is_refresh_only;
+  LifetimeCount();
+};
+struct Count {
+  LifetimeCount lifetime;
+  HighestCount highest;
 
-  uint64_t start_cycle;
-  bool truncated_by_refresh = false;
-  bool is_refresh_only = true;
   Count();
   bool operator<(Count& b);
+
+  void CopyInto(Count C);
+  void Combine(Count C);
 };
 
 class HammerCounter
@@ -63,6 +77,8 @@ class HammerCounter
   std::map<Address, Count> row_open_counter;
   std::map<uint64_t, uint64_t> read_access_histogram;
   std::map<uint64_t, uint64_t> write_access_histogram;
+  std::map<uint64_t, uint64_t> pref_access_histogram;
+  std::map<uint64_t, uint64_t> wb_access_histogram;
 
   static std::string output_f;
 
@@ -74,12 +90,11 @@ class HammerCounter
   // cycle values
   uint64_t highest_hammers_per_cycle;
   uint64_t highest_hammers_per_cycle_p;
+  uint64_t highest_hammers_per_cycle_wb;
   uint64_t highest_hammer_row;
   uint64_t last_hammer_cycles;
 
   // calculated values
-  uint64_t rows_per_refresh;
-  uint64_t cycles_per_refresh;
   uint64_t cycles_per_bin;
   uint64_t cycles_per_heartbeat;
 
@@ -88,6 +103,7 @@ class HammerCounter
   uint64_t row_charges_rp;
   uint64_t row_charges_rn;
   uint64_t row_charges_w;
+  uint64_t row_charges_wb;
   uint64_t row_charges_wp;
   uint64_t row_charges_wn;
   uint64_t refreshes;
@@ -96,7 +112,6 @@ class HammerCounter
   uint64_t total_cycles;
   uint64_t row_charges_ref;
 
-  uint64_t unique_rows_visited;
   uint64_t lost_hammers;
   uint64_t lost_hammers_to_access;
   uint64_t lost_hammers_to_refresh;
@@ -114,7 +129,7 @@ public:
   //~HammerCounter();
   static void set_output_file(std::string f);
   static std::string get_output_file();
-  void log_charge(Address addr, int type, bool prefetch,uint64_t cycle);
+  void log_charge(Address addr, int type, bool prefetch,uint64_t cycle, bool write_back);
   void log_write(Address addr);
   void log_cycle();
   //void log_refresh(uint64_t row, uint64_t cycle);

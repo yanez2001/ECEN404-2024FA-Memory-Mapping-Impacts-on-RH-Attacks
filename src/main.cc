@@ -108,6 +108,7 @@ int main(int argc, char** argv)
   if(hammer_file_option->count() > 0)
   {
     HammerCounter::set_output_file(hammer_file);
+    CACHE::set_eviction_file_name(hammer_file);
   }
 
   std::vector<champsim::tracereader> traces;

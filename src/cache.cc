@@ -23,6 +23,7 @@
 #include <numeric>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
+#include <fstream>
 
 #include "champsim.h"
 #include "champsim_constants.h"
@@ -31,6 +32,9 @@
 #include "util/algorithm.h"
 #include "util/span.h"
 #include <fmt/core.h>
+std::string CACHE::eviction_file_name = "hammer";
+
+void CACHE::set_eviction_file_name(std::string f) {eviction_file_name = f;}
 
 CACHE::tag_lookup_type::tag_lookup_type(request_type req, bool local_pref, bool skip)
     : address(req.address), v_address(req.v_address), data(req.data), ip(req.ip), instr_id(req.instr_id), pf_metadata(req.pf_metadata), cpu(req.cpu),
@@ -114,6 +118,7 @@ bool CACHE::handle_fill(const mshr_type& fill_mshr)
       writeback_packet.ip = 0;
       writeback_packet.type = access_type::WRITE;
       writeback_packet.pf_metadata = way->pf_metadata;
+      writeback_packet.write_back = true;
       writeback_packet.response_requested = false;
 
       if constexpr (champsim::debug_print) {
@@ -123,8 +128,17 @@ bool CACHE::handle_fill(const mshr_type& fill_mshr)
 
       success = lower_level->add_wq(writeback_packet);
     }
-
     if (success) {
+
+      if(NAME == "LLC")
+      {
+      auto existing_entry = eviction_count.find(way->address);
+      if(existing_entry == eviction_count.end())
+      eviction_count[way->address] = 1;
+      else
+      eviction_count[way->address]++;
+      }
+
       auto evicting_address = (ever_seen_data ? way->address : way->v_address) & ~champsim::bitmask(match_offset_bits ? 0 : OFFSET_BITS);
 
       if (way->prefetch)
@@ -674,6 +688,7 @@ void CACHE::initialize()
 {
   impl_prefetcher_initialize();
   impl_initialize_replacement();
+  phase_num = 0;
 }
 
 void CACHE::begin_phase()
@@ -733,8 +748,22 @@ void CACHE::end_phase(unsigned finished_cpu)
     ul->roi_stats.WQ_TO_CACHE = ul->sim_stats.WQ_TO_CACHE;
     ul->roi_stats.WQ_FORWARD = ul->sim_stats.WQ_FORWARD;
   }
-}
 
+  print_eviction_stats();
+  phase_num++;
+}
+void CACHE::print_eviction_stats()
+{
+  std::ofstream file;
+  file.open(eviction_file_name + "_" + NAME + "_" + std::to_string(phase_num) + "_.log");
+
+  for(const auto& elem : eviction_count)
+  {
+    file << std::hex << elem.first << ":" << std::dec << elem.second << "\n"; 
+  }
+  eviction_count.clear();
+  file.close();
+}
 template <typename T>
 bool CACHE::should_activate_prefetcher(const T& pkt) const
 {

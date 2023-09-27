@@ -29,6 +29,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "champsim.h"
 #include "champsim_constants.h"
@@ -154,6 +155,11 @@ class CACHE : public champsim::operable
   std::deque<tag_lookup_type> inflight_tag_check{};
   std::deque<tag_lookup_type> translation_stash{};
 
+  //cache evict metrics
+  std::map<uint64_t,uint64_t> eviction_count;
+  uint64_t phase_num;
+  void print_eviction_stats();
+  static std::string eviction_file_name;
 public:
   std::vector<channel_type*> upper_levels;
   channel_type* lower_level;
@@ -181,7 +187,7 @@ public:
   std::deque<mshr_type> inflight_writes;
 
   long operate() override final;
-
+  static void set_eviction_file_name(std::string f);
   void initialize() override final;
   void begin_phase() override final;
   void end_phase(unsigned cpu) override final;

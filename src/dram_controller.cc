@@ -163,7 +163,7 @@ long DRAM_CHANNEL::schedule_refresh()
     else if(it->under_refresh && it->event_cycle <= current_cycle)
     {
       //log the charge of the previous bank, and the next bank
-      if(it->open_row.has_value())
+      /*if(it->open_row.has_value())
       {
         auto address_dec = std::distance(bank_request.begin(),it);
         auto op_rank = address_dec / DRAM_BANKS;
@@ -172,20 +172,20 @@ long DRAM_CHANNEL::schedule_refresh()
 
         auto channel = std::distance(MC->channels.data(), this);
         HC.log_charge(Address(channel, op_bank,
-                            op_rank,op_row),RH_REFRESH,false,current_cycle);
+                            op_rank,op_row),RH_REFRESH,false,current_cycle,false);
 
-      }
+      }*/
       it->under_refresh = false;
       it->open_row.reset();
       
-      //log the refresh charges
+      //log the refresh activations
       auto address_dec = std::distance(bank_request.begin(),it);
       auto op_rank = address_dec / DRAM_BANKS;
       auto op_bank = address_dec % DRAM_BANKS;
       auto op_row = refresh_row;
       auto channel = std::distance(MC->channels.data(), this);
       for(int i = 0; i < 8; i++)
-        HC.log_charge(Address(channel, op_bank, op_rank,op_row+i),RH_REFRESH,false,current_cycle);
+        HC.log_charge(Address(channel, op_bank, op_rank,op_row+i),RH_REFRESH,false,current_cycle,false);
 
       progress++;
     }
@@ -210,7 +210,7 @@ void DRAM_CHANNEL::swap_write_mode()
         if (it->event_cycle < (current_cycle + tCAS)) {
 
           //log charge
-          if(it->open_row.has_value())
+          /*if(it->open_row.has_value())
           {
             auto address_dec = std::distance(bank_request.begin(),it);
             auto op_rank = address_dec / DRAM_BANKS;
@@ -219,9 +219,9 @@ void DRAM_CHANNEL::swap_write_mode()
 
             auto channel = std::distance(MC->channels.data(), this);
             HC.log_charge(Address(channel, op_bank,
-                                op_rank,op_row),write_mode ? RH_WRITE : RH_READ,false,current_cycle);
+                                op_rank,op_row),write_mode ? RH_WRITE : RH_READ,false,current_cycle,false);
 
-          }
+          }*/
 
           //we are closing row
           it->open_row.reset();
@@ -330,11 +330,10 @@ long DRAM_CHANNEL::service_packet(DRAM_CHANNEL::queue_type::iterator pkt)
 
       // this bank is now busy
       uint64_t row_charge_delay = bank_request[op_idx].open_row.has_value() ? tRP + tRCD : tRCD;
-
-      //log precharge
-      if(bank_request[op_idx].open_row.has_value() && !row_buffer_hit)
+      //log activation
+      if(!row_buffer_hit)
       HC.log_charge(Address(get_channel(pkt->value().address), get_bank(pkt->value().address),
-                                get_rank(pkt->value().address),bank_request[op_idx].open_row.value()),write_mode ? RH_WRITE : RH_READ,pkt->value().type == access_type::PREFETCH,current_cycle);
+                                get_rank(pkt->value().address),op_row),write_mode ? RH_WRITE : RH_READ,pkt->value().type == access_type::PREFETCH,current_cycle,pkt->value().write_back);
 
       bank_request[op_idx] = {true,row_buffer_hit,false,false,std::optional{op_row}, current_cycle + tCAS + (row_buffer_hit ? 0 : row_charge_delay),pkt};
       pkt->value().scheduled = true;
@@ -468,7 +467,7 @@ void MEMORY_CONTROLLER::initiate_requests()
 }
 
 DRAM_CHANNEL::request_type::request_type(const typename champsim::channel::request_type& req)
-  :   pf_metadata(req.pf_metadata), address(req.address), v_address(req.v_address), data(req.data), instr_id(req.instr_id), instr_depend_on_me(req.instr_depend_on_me)
+  :   pf_metadata(req.pf_metadata), address(req.address), v_address(req.v_address), data(req.data), instr_id(req.instr_id), instr_depend_on_me(req.instr_depend_on_me), write_back(req.write_back)
 {
   asid[0] = req.asid[0];
   asid[1] = req.asid[1];

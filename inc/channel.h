@@ -79,6 +79,8 @@ class channel
     uint64_t instr_id = 0;
     uint64_t ip = 0;
 
+    bool write_back = false;
+
     std::vector<std::reference_wrapper<ooo_model_instr>> instr_depend_on_me{};
   };
 
