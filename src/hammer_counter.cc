@@ -6,6 +6,8 @@ std::string HammerCounter::output_f = "hammer";
 uint64_t HammerCounter::target_row = 0;
 uint64_t HammerCounter::target_cycle = 0;
 
+std::ofstream memory_log_dump;
+
 std::string HammerCounter::get_output_file() { return (output_f); }
 
 uint64_t HammerCounter::get_target_row() { return (target_row); }
@@ -106,12 +108,55 @@ HammerCounter::HammerCounter()
   cycles_per_heartbeat = (STAT_PRINTING_PERIOD / 4);
 }
 
+uint64_t previous_row = 0;
+uint64_t previous_addr = 0;
+uint64_t previous_cycle = 0;
+uint64_t previous_bank = 0;
+int previous_type = 0;
+bool previous_pref = false;
+bool previous_wb = false;
+
 void HammerCounter::log_charge(Address addr, int type, bool prefetch, uint64_t cycle, bool write_back)
 {
   channel_num = addr.get_channel();
   // log hit on both adjacent rows
   Address addr_high = Address(addr.get_channel(), addr.get_bank(), addr.get_rank(), (addr.get_row() + 1) % DRAM_ROWS);
   Address addr_low = Address(addr.get_channel(), addr.get_bank(), addr.get_rank(), (addr.get_row() == 0) ? DRAM_ROWS - 1 : addr.get_row() - 1);
+
+  if(addr.get_row() == target_row || addr_high.get_row() == target_row || addr_low.get_row() == target_row)
+  {
+    //print to mem file
+    memory_log_dump.open(output_f + "_memory_accesses.log",std::fstream::app);
+          if(previous_pref)
+            memory_log_dump << "PPREFETCH ";
+          else if(previous_wb)
+            memory_log_dump << "PWRITEBACK ";
+          else
+            memory_log_dump << "PNORMAL ";
+          memory_log_dump << "PADDR: " << std::hex << previous_addr << 
+                             " PROW: " << previous_row << 
+                             " PBANK: " << previous_bank <<
+                             " CYCLE: " << std::dec << previous_cycle << std::endl;
+          if(prefetch)
+            memory_log_dump << "PREFETCH ";
+          else if(write_back)
+            memory_log_dump << "WRITEBACK ";
+          else
+            memory_log_dump << "NORMAL ";
+          memory_log_dump << "PADDR: " << std::hex << addr.get_addr() << 
+                             " PROW: " << addr.get_row() <<
+                             " PBANK: " << addr.get_bank() << 
+                             " CYCLE: " << std::dec << total_cycles << std::endl;
+    memory_log_dump.close();
+
+  }
+  previous_row = addr.get_row();
+  previous_addr = addr.get_addr();
+  previous_bank = addr.get_bank();
+  previous_cycle = total_cycles;
+  previous_type = type;
+  previous_pref = prefetch;
+  previous_wb = write_back;
 
   if(type == RH_REFRESH)
   {
@@ -354,6 +399,13 @@ void HammerCounter::log_cycle()
     highest_hammers_per_cycle = 0;
     highest_hammers_per_cycle_p = 0;
     last_hammer_cycles = row_charges_r + row_charges_w;
+  }
+
+  //clear for synchronicity
+  if(total_cycles == target_cycle)
+  {
+    row_open_counter.clear();
+    row_open_master.clear();
   }
 }
 

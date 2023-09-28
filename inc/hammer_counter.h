@@ -34,6 +34,8 @@ public:
 
   uint64_t get_channel() const { return (std::get<0>(addr)); }
 
+  uint64_t get_addr() const { return ((std::get<0>(addr) << LOG2_BLOCK_SIZE) + (std::get<1>(addr) << (LOG2_BLOCK_SIZE+champsim::lg2(DRAM_CHANNELS))) + (std::get<2>(addr) << (LOG2_BLOCK_SIZE + champsim::lg2(DRAM_CHANNELS) + champsim::lg2(DRAM_COLUMNS) + champsim::lg2(DRAM_BANKS))) + (std::get<3>(addr) << (LOG2_BLOCK_SIZE + champsim::lg2(DRAM_CHANNELS) + champsim::lg2(DRAM_COLUMNS) + champsim::lg2(DRAM_BANKS) + champsim::lg2(DRAM_RANKS))));}
+
   bool operator<(const Address& a) const { return (addr < a.addr); }
 };
 struct HighestCount

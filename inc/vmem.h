@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <map>
+#include <deque>
 
 #include "champsim_constants.h"
 
@@ -35,6 +36,9 @@ private:
   std::map<std::pair<uint32_t, uint64_t>, uint64_t> vpage_to_ppage_map;
   std::map<std::tuple<uint32_t, uint64_t, uint32_t>, uint64_t> page_table;
 
+  //for randomization
+  std::deque<uint64_t> ppage_free_list;
+
   uint64_t next_pte_page = 0;
 
   uint64_t next_ppage;
@@ -45,6 +49,7 @@ private:
 
 public:
   static uint64_t virtual_seed;
+  uint64_t pmem_size;
   const uint64_t minor_fault_penalty;
   const std::size_t pt_levels;
   const uint64_t pte_page_size; // Size of a PTE page
@@ -56,7 +61,10 @@ public:
   std::size_t available_ppages() const;
   std::pair<uint64_t, uint64_t> va_to_pa(uint32_t cpu_num, uint64_t vaddr);
   std::pair<uint64_t, uint64_t> get_pte_pa(uint32_t cpu_num, uint64_t vaddr, std::size_t level);
-    static void set_virtual_seed(uint64_t v_seed);
+  static void set_virtual_seed(uint64_t v_seed);
+
+  void shuffle_pages();
+  void populate_pages();
 };
 
 #endif

@@ -754,6 +754,9 @@ void CACHE::end_phase(unsigned finished_cpu)
 }
 void CACHE::print_eviction_stats()
 {
+  if(NAME != "LLC")
+  return;
+  
   std::ofstream file;
   file.open(eviction_file_name + "_" + NAME + "_" + std::to_string(phase_num) + "_.log");
 

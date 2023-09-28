@@ -32,7 +32,7 @@ void VirtualMemory::set_virtual_seed(uint64_t v_seed)
 
 VirtualMemory::VirtualMemory(uint64_t page_table_page_size, std::size_t page_table_levels, uint64_t minor_penalty, MEMORY_CONTROLLER& dram)
     : next_ppage(VMEM_RESERVE_CAPACITY), last_ppage(1ull << (LOG2_PAGE_SIZE + champsim::lg2(page_table_page_size / PTE_BYTES) * page_table_levels)),
-      minor_fault_penalty(minor_penalty), pt_levels(page_table_levels), pte_page_size(page_table_page_size)
+      minor_fault_penalty(minor_penalty), pt_levels(page_table_levels), pte_page_size(page_table_page_size),pmem_size(dram.size())
 {
   assert(page_table_page_size > 1024);
   assert(page_table_page_size == (1ull << champsim::lg2(page_table_page_size)));
@@ -42,9 +42,30 @@ VirtualMemory::VirtualMemory(uint64_t page_table_page_size, std::size_t page_tab
   if (required_bits > 64)
     fmt::print("WARNING: virtual memory configuration would require {} bits of addressing.\n", required_bits); // LCOV_EXCL_LINE
   if (required_bits > champsim::lg2(dram.size()))
-    fmt::print("WARNING: physical memory size is smaller than virtual memory size.\n"); // LCOV_EXCL_LINE
-}
+    fmt::print("WARNING: physical memory size is smaller than virtual memory size; Virtual address space will be aliased.\n"); // LCOV_EXCL_LINE
 
+  populate_pages();
+}
+void VirtualMemory::shuffle_pages()
+{
+  if(virtual_seed != 0)
+  {
+    std::mt19937_64 rng(virtual_seed);
+    std::shuffle(ppage_free_list.begin(),ppage_free_list.end(),rng);
+    fmt::print("Shuffled {} physical pages with seed {}\n",ppage_free_list.size(),virtual_seed);
+  }
+}
+void VirtualMemory::populate_pages()
+{
+  ppage_free_list.resize((pmem_size - VMEM_RESERVE_CAPACITY)/PAGE_SIZE);
+  uint64_t base_address = VMEM_RESERVE_CAPACITY;
+  for(auto it = ppage_free_list.begin(); it != ppage_free_list.end(); it++)
+  {
+    *(it) = base_address;
+    base_address += PAGE_SIZE;
+  }
+  fmt::print("Created {} new physical pages\n",ppage_free_list.size());
+}
 uint64_t VirtualMemory::shamt(std::size_t level) const { return LOG2_PAGE_SIZE + champsim::lg2(pte_page_size / PTE_BYTES) * (level - 1); }
 
 uint64_t VirtualMemory::get_offset(uint64_t vaddr, std::size_t level) const
@@ -55,12 +76,20 @@ uint64_t VirtualMemory::get_offset(uint64_t vaddr, std::size_t level) const
 uint64_t VirtualMemory::ppage_front() const
 {
   assert(available_ppages() > 0);
-  return next_ppage;
+  return ppage_free_list.front();
 }
 
-void VirtualMemory::ppage_pop() { next_ppage += PAGE_SIZE; }
+void VirtualMemory::ppage_pop()
+{ 
+  ppage_free_list.pop_front();
+  if(available_ppages() == 0)
+  {
+    populate_pages();
+    shuffle_pages();
+  }
+}
 
-std::size_t VirtualMemory::available_ppages() const { return (last_ppage - next_ppage) / PAGE_SIZE; }
+std::size_t VirtualMemory::available_ppages() const { return ppage_free_list.size(); }
 
 std::pair<uint64_t, uint64_t> VirtualMemory::va_to_pa(uint32_t cpu_num, uint64_t vaddr)
 {

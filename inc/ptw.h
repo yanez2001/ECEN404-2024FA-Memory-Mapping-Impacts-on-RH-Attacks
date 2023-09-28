@@ -166,6 +166,7 @@ public:
 
   void begin_phase() override final;
   void print_deadlock() override final;
+  void initialize() override final;
 };
 
 #endif

@@ -157,7 +157,10 @@ long PageTableWalker::operate()
   MSHR.insert(std::cend(MSHR), std::begin(next_steps), std::end(next_steps));
   return progress;
 }
-
+void PageTableWalker::initialize()
+{
+  vmem->shuffle_pages();
+}
 void PageTableWalker::finish_packet(const response_type& packet)
 {
   auto finish_step = [this](auto& mshr_entry) {
