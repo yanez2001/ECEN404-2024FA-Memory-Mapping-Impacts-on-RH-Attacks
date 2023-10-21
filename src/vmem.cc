@@ -112,7 +112,7 @@ std::pair<uint64_t, uint64_t> VirtualMemory::va_to_pa(uint32_t cpu_num, uint64_t
   auto paddr = champsim::splice_bits(ppage->second, vaddr, LOG2_PAGE_SIZE);
 
   //implement XOR scheme here
-  paddr = translate_xor(vaddr,paddr);
+  //paddr = translate_xor(vaddr,paddr);
   if constexpr (champsim::debug_print) {
     fmt::print("[VMEM] {} paddr: {:x} vaddr: {:x} fault: {}\n", __func__, paddr, vaddr, fault);
   }
@@ -144,7 +144,7 @@ std::pair<uint64_t, uint64_t> VirtualMemory::get_pte_pa(uint32_t cpu_num, uint64
   auto paddr = champsim::splice_bits(ppage->second, offset * PTE_BYTES, champsim::lg2(pte_page_size));
 
   //implement xor scheme here
-  paddr = translate_xor(vaddr,paddr);
+  //paddr = translate_xor(vaddr,paddr);
 
   if constexpr (champsim::debug_print) {
     fmt::print("[VMEM] {} paddr: {:x} vaddr: {:x} pt_page_offset: {} translation_level: {} fault: {}\n", __func__, paddr, vaddr, offset, level, fault);

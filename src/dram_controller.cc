@@ -107,8 +107,15 @@ long DRAM_CHANNEL::operate()
 
   if (current_cycle % HC.cycles_per_heartbeat == 0) {
     // print heartbeat
-    fmt::print("Heartbeat DRAM {} Bank Util: {:.3f} Cumulative Bank Util: {:.3f}\n",HC.channel_num,((bank_util-last_bank_util)/DRAM_BANKS)/double(HC.cycles_per_heartbeat),((bank_util)/DRAM_BANKS)/double(current_cycle));
+    double cum_hit_rate = (rb_hits / double(rb_hits + rb_miss));
+    double hit_rate = ((rb_hits - last_rb_hits) / double((rb_hits-last_rb_hits) + (rb_miss - last_rb_miss)));
+
+    double throughput = (((bank_util - last_bank_util)/double(HC.cycles_per_heartbeat)) * (DRAM_IO_FREQ*1e6)) / double(1<<30);
+    double cum_throughput = (((bank_util)/double(current_cycle)) * (DRAM_IO_FREQ*1e6)) / double(1<<30);
+    fmt::print("Heartbeat DRAM {} Throughput: {:.3f}GB/s Cumulative Throughput: {:.3f}GB/s Row Buffer Hit Rate: {:.3f} Cumulative Row Buffer Hit Rate: {:.3f}\n",HC.channel_num,throughput,cum_throughput,hit_rate,cum_hit_rate);
     last_bank_util = bank_util;
+    last_rb_hits = rb_hits;
+    last_rb_miss = rb_miss;
   }
 
   return progress;
@@ -130,6 +137,8 @@ long DRAM_CHANNEL::finish_dbus_request()
     active_request->pkt->reset();
     active_request = std::end(bank_request);
     ++progress;
+
+    bank_util += BLOCK_SIZE;
   }
 
   return progress;
@@ -154,11 +163,6 @@ long DRAM_CHANNEL::schedule_refresh()
   //go through each bank, and handle refreshes
   for (auto it = std::begin(bank_request); it != std::end(bank_request); ++it)
   {
-    //update bank util stats
-    if(!it->valid)
-    {
-      bank_util++;
-    }
     //refresh is now needed for this bank
     if(schedule_refresh)
     {
@@ -340,6 +344,10 @@ long DRAM_CHANNEL::service_packet(DRAM_CHANNEL::queue_type::iterator pkt)
     if (!bank_request[op_idx].valid && !bank_request[op_idx].under_refresh) {
       bool row_buffer_hit = (bank_request[op_idx].open_row.has_value() && bank_request[op_idx].open_row.value() == op_row);
 
+      if(row_buffer_hit)
+      rb_hits++;
+      else
+      rb_miss++;
       // this bank is now busy
       uint64_t row_charge_delay = bank_request[op_idx].open_row.has_value() ? tRP + tRCD : tRCD;
       //log activation
