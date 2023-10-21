@@ -72,6 +72,8 @@ void HammerCounter::InsertIntoMap(Address A, Count C)
 
 Count::Count()
 {
+  lifetime = LifetimeCount();
+  highest = HighestCount();
 }
 bool Count::operator<(Count& b) { return (highest.hammer_count < b.highest.hammer_count); }
 
@@ -110,13 +112,14 @@ HammerCounter::HammerCounter()
 
 uint64_t previous_row = 0;
 uint64_t previous_addr = 0;
+uint64_t previous_vaddr = 0;
 uint64_t previous_cycle = 0;
 uint64_t previous_bank = 0;
 int previous_type = 0;
 bool previous_pref = false;
 bool previous_wb = false;
 
-void HammerCounter::log_charge(Address addr, int type, bool prefetch, uint64_t cycle, bool write_back)
+void HammerCounter::log_charge(Address addr,uint64_t p_addr, uint64_t v_addr, int type, bool prefetch, uint64_t cycle, bool write_back)
 {
   channel_num = addr.get_channel();
   // log hit on both adjacent rows
@@ -134,6 +137,7 @@ void HammerCounter::log_charge(Address addr, int type, bool prefetch, uint64_t c
           else
             memory_log_dump << "PNORMAL ";
           memory_log_dump << "PADDR: " << std::hex << previous_addr << 
+                             " VADDR: " << std::hex << previous_vaddr << 
                              " PROW: " << previous_row << 
                              " PBANK: " << previous_bank <<
                              " CYCLE: " << std::dec << previous_cycle << std::endl;
@@ -143,7 +147,8 @@ void HammerCounter::log_charge(Address addr, int type, bool prefetch, uint64_t c
             memory_log_dump << "WRITEBACK ";
           else
             memory_log_dump << "NORMAL ";
-          memory_log_dump << "PADDR: " << std::hex << addr.get_addr() << 
+          memory_log_dump << "PADDR: " << std::hex << p_addr << 
+                             " VADDR: " << v_addr << 
                              " PROW: " << addr.get_row() <<
                              " PBANK: " << addr.get_bank() << 
                              " CYCLE: " << std::dec << total_cycles << std::endl;
@@ -151,7 +156,8 @@ void HammerCounter::log_charge(Address addr, int type, bool prefetch, uint64_t c
 
   }
   previous_row = addr.get_row();
-  previous_addr = addr.get_addr();
+  previous_addr = p_addr;
+  previous_vaddr = v_addr;
   previous_bank = addr.get_bank();
   previous_cycle = total_cycles;
   previous_type = type;
@@ -392,7 +398,7 @@ void HammerCounter::log_cycle()
 
   if (total_cycles % cycles_per_heartbeat == 0) {
     // print heartbeat
-    std::cout << "Heartbeat DRAM " << channel_num << " : " << (unsigned long)(total_cycles) << " Highest Hammer Row: " << std::hex
+    std::cout << "Heartbeat HAMMER COUNTER " << channel_num << " : " << (unsigned long)(total_cycles) << " Highest Hammer Row: " << std::hex
               << highest_hammer_row << std::dec << " Hammer Count: " << highest_hammers_per_cycle << " (" << highest_hammers_per_cycle_p
               << ") Refresh Row: " << std::hex << refresh_row << std::dec << " Heartbeat Hammers: " << ((row_charges_r + row_charges_w) - last_hammer_cycles)
               << "\n";
@@ -474,21 +480,25 @@ void HammerCounter::print_file()
 
   // print output
   for (auto it = final_output.begin(); it != final_output.end(); it++) {
-    // Print out data for row
-    file << "\tChannel: 0x" << std::hex << it->first.get_channel();
-    file << "\tRank: 0x" << std::hex << it->first.get_rank();
-    file << "\tBank: 0x" << std::hex << it->first.get_bank();
-    file << "\tRow: 0x" << std::hex << it->first.get_row();
-    file << "\tLifetime Hammers/(Normal:Prefetch:Writeback): " << std::dec << it->second.lifetime.total_hammers << " (" << it->second.lifetime.normal_hammers << ":" << it->second.lifetime.prefetch_hammers << ":" << it->second.lifetime.write_back_hammers << ") ";
-    if (it->second.highest.truncated_by_refresh)
-      file << "\tLimit: Refresh ";
-    else
-      file << "\tLimit: Access ";
-    file << "\tHighest Single-Cycle Hammers(" << std::dec << it->second.highest.start_cycle << ")/(Normal:Prefetch:Writeback): " << std::dec << it->second.highest.hammer_count << " (" << it->second.highest.normal_hammer_count << ":" << it->second.highest.prefetch_hammer_count
-         << ":" << it->second.highest.write_back_count << ") ";
-    file << "\tLost Hammers/(Refresh:Access): " << std::dec << it->second.lifetime.lost_hammers_to_refresh + it->second.lifetime.lost_hammers_to_access << " ("
-         << it->second.lifetime.lost_hammers_to_refresh << ":" << it->second.lifetime.lost_hammers_to_access << ") ";
-    file << "\n";
+    //had to undergo non-refresh activation
+    if(!it->second.lifetime.is_refresh_only)
+      {
+      // Print out data for row
+      file << "\tChannel: 0x" << std::hex << it->first.get_channel();
+      file << "\tRank: 0x" << std::hex << it->first.get_rank();
+      file << "\tBank: 0x" << std::hex << it->first.get_bank();
+      file << "\tRow: 0x" << std::hex << it->first.get_row();
+      file << "\tLifetime Hammers/(Normal:Prefetch:Writeback): " << std::dec << it->second.lifetime.total_hammers << " (" << it->second.lifetime.normal_hammers << ":" << it->second.lifetime.prefetch_hammers << ":" << it->second.lifetime.write_back_hammers << ") ";
+      if (it->second.highest.truncated_by_refresh)
+        file << "\tLimit: Refresh ";
+      else
+        file << "\tLimit: Access ";
+      file << "\tHighest Single-Cycle Hammers(" << std::dec << it->second.highest.start_cycle << ")/(Normal:Prefetch:Writeback): " << std::dec << it->second.highest.hammer_count << " (" << it->second.highest.normal_hammer_count << ":" << it->second.highest.prefetch_hammer_count
+          << ":" << it->second.highest.write_back_count << ") ";
+      file << "\tLost Hammers/(Refresh:Access): " << std::dec << it->second.lifetime.lost_hammers_to_refresh + it->second.lifetime.lost_hammers_to_access << " ("
+          << it->second.lifetime.lost_hammers_to_refresh << ":" << it->second.lifetime.lost_hammers_to_access << ") ";
+      file << "\n";
+    }
   }
 
   file << "####################################################################################################\n";

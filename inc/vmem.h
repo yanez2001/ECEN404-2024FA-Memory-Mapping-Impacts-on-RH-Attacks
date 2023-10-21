@@ -47,6 +47,8 @@ private:
   uint64_t ppage_front() const;
   void ppage_pop();
 
+  MEMORY_CONTROLLER& dram;
+
 public:
   static uint64_t virtual_seed;
   uint64_t pmem_size;

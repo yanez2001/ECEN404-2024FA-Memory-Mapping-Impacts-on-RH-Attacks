@@ -98,7 +98,7 @@ class HammerCounter
 
   // calculated values
   uint64_t cycles_per_bin;
-  uint64_t cycles_per_heartbeat;
+  
 
   // cumulative stats
   uint64_t row_charges_r;
@@ -120,18 +120,20 @@ class HammerCounter
   uint64_t victim_reads;
   uint64_t victim_writes;
 
-  uint64_t channel_num;
+  
 
   // utility funcs
   void flush();
   void InsertIntoMap(Address A, Count C);
 
 public:
+uint64_t cycles_per_heartbeat;
+uint64_t channel_num;
   HammerCounter();
   //~HammerCounter();
   static void set_output_file(std::string f);
   static std::string get_output_file();
-  void log_charge(Address addr, int type, bool prefetch,uint64_t cycle, bool write_back);
+  void log_charge(Address addr,uint64_t p_addr, uint64_t v_addr, int type, bool prefetch,uint64_t cycle, bool write_back);
   void log_write(Address addr);
   void log_cycle();
   //void log_refresh(uint64_t row, uint64_t cycle);

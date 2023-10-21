@@ -104,6 +104,13 @@ long DRAM_CHANNEL::operate()
   {
     refresh_row = HC.get_target_row() + 8;
   }
+
+  if (current_cycle % HC.cycles_per_heartbeat == 0) {
+    // print heartbeat
+    fmt::print("Heartbeat DRAM {} Bank Util: {:.3f} Cumulative Bank Util: {:.3f}\n",HC.channel_num,((bank_util-last_bank_util)/DRAM_BANKS)/double(HC.cycles_per_heartbeat),((bank_util)/DRAM_BANKS)/double(current_cycle));
+    last_bank_util = bank_util;
+  }
+
   return progress;
 }
 
@@ -147,6 +154,11 @@ long DRAM_CHANNEL::schedule_refresh()
   //go through each bank, and handle refreshes
   for (auto it = std::begin(bank_request); it != std::end(bank_request); ++it)
   {
+    //update bank util stats
+    if(!it->valid)
+    {
+      bank_util++;
+    }
     //refresh is now needed for this bank
     if(schedule_refresh)
     {
@@ -185,7 +197,7 @@ long DRAM_CHANNEL::schedule_refresh()
       auto op_row = refresh_row;
       auto channel = std::distance(MC->channels.data(), this);
       for(int i = 0; i < 8; i++)
-        HC.log_charge(Address(channel, op_bank, op_rank,op_row+i),RH_REFRESH,false,current_cycle,false);
+        HC.log_charge(Address(channel, op_bank, op_rank,op_row+i),0,0,RH_REFRESH,false,current_cycle,false);
 
       progress++;
     }
@@ -318,7 +330,7 @@ DRAM_CHANNEL::queue_type::iterator DRAM_CHANNEL::schedule_packet()
 long DRAM_CHANNEL::service_packet(DRAM_CHANNEL::queue_type::iterator pkt)
 {
   long progress{0};
-  if (pkt->has_value() && pkt->value().event_cycle <= current_cycle) {
+  if (pkt->has_value() && pkt->value().event_cycle <= current_cycle && !pkt->value().scheduled) {
     auto op_rank = get_rank(pkt->value().address);
     auto op_bank = get_bank(pkt->value().address);
     auto op_row = get_row(pkt->value().address);
@@ -326,14 +338,14 @@ long DRAM_CHANNEL::service_packet(DRAM_CHANNEL::queue_type::iterator pkt)
     auto op_idx = op_rank * DRAM_BANKS + op_bank;
 
     if (!bank_request[op_idx].valid && !bank_request[op_idx].under_refresh) {
-      bool row_buffer_hit = (bank_request[op_idx].open_row.has_value() && *(bank_request[op_idx].open_row) == op_row);
+      bool row_buffer_hit = (bank_request[op_idx].open_row.has_value() && bank_request[op_idx].open_row.value() == op_row);
 
       // this bank is now busy
       uint64_t row_charge_delay = bank_request[op_idx].open_row.has_value() ? tRP + tRCD : tRCD;
       //log activation
       if(!row_buffer_hit)
       HC.log_charge(Address(get_channel(pkt->value().address), get_bank(pkt->value().address),
-                                get_rank(pkt->value().address),op_row),write_mode ? RH_WRITE : RH_READ,pkt->value().type == access_type::PREFETCH,current_cycle,pkt->value().write_back);
+                                get_rank(pkt->value().address),op_row),pkt->value().address,pkt->value().v_address,write_mode ? RH_WRITE : RH_READ,pkt->value().type == access_type::PREFETCH,current_cycle,pkt->value().write_back);
 
       bank_request[op_idx] = {true,row_buffer_hit,false,false,std::optional{op_row}, current_cycle + tCAS + (row_buffer_hit ? 0 : row_charge_delay),pkt};
       pkt->value().scheduled = true;
@@ -513,8 +525,12 @@ bool MEMORY_CONTROLLER::add_wq(const request_type& packet)
 }
 
 /*
- * | row address | rank index | column address | bank index | channel | block
- * offset |
+ * | row address | rank index | column address | bank index | channel | block offset |
+ */
+//this needs to be changed. We need to find a way to dynamically map as to support different state-of-the-art mappings
+
+/*
+   | row address | rank index | channel index | remaining column bit(s) |  bank index | column address (sum to 9 with block offset) | block offset |
  */
 
 unsigned long MEMORY_CONTROLLER::dram_get_channel(uint64_t address) const
@@ -533,19 +549,31 @@ unsigned long MEMORY_CONTROLLER::dram_get_row(uint64_t address) const { return c
 
 unsigned long DRAM_CHANNEL::get_channel(uint64_t address) const
 {
-  int shift = LOG2_BLOCK_SIZE;
+  int shift = LOG2_BLOCK_SIZE + champsim::lg2(DRAM_COLUMNS) + champsim::lg2(DRAM_BANKS);
   return (address >> shift) & champsim::bitmask(champsim::lg2(DRAM_CHANNELS));
 }
 unsigned long DRAM_CHANNEL::get_bank(uint64_t address) const
 {
-  int shift = champsim::lg2(DRAM_CHANNELS) + LOG2_BLOCK_SIZE;
-  return (address >> shift) & champsim::bitmask(champsim::lg2(BANKS));
+  int shift = std::min(int(LOG2_BLOCK_SIZE + champsim::lg2(COLUMNS)),int(LOG2_PAGE_SIZE) - int(champsim::lg2(BANKS)));
+  uint64_t bank_address = ((address >> shift)) & champsim::bitmask(champsim::lg2(BANKS));
+  return bank_address;
+
+  //auto shift = LOG2_BLOCK_SIZE + champsim::lg2(DRAM_CHANNELS);
+  //return((address >> shift) & champsim::bitmask(champsim::lg2(BANKS)));
 }
 
 unsigned long DRAM_CHANNEL::get_column(uint64_t address) const
 {
-  auto shift = champsim::lg2(BANKS) + champsim::lg2(DRAM_CHANNELS) + LOG2_BLOCK_SIZE;
-  return (address >> shift) & champsim::bitmask(champsim::lg2(COLUMNS));
+  auto shift1 = LOG2_BLOCK_SIZE;
+  auto secondary_bits = std::max(int(champsim::lg2(COLUMNS)) + int(LOG2_BLOCK_SIZE) - int(LOG2_PAGE_SIZE) + int(champsim::lg2(BANKS)),0);
+  auto shift2 = LOG2_BLOCK_SIZE + champsim::lg2(BANKS) + champsim::lg2(COLUMNS) - secondary_bits;
+  auto part_1 = (address >> shift1) & champsim::bitmask(champsim::lg2(COLUMNS) - secondary_bits);
+  auto part_2 = (address >> shift2) & champsim::bitmask(secondary_bits);
+  
+  return (part_1 | (part_2 << (champsim::lg2(COLUMNS) - secondary_bits)));
+
+  //auto shift = LOG2_BLOCK_SIZE + champsim::lg2(DRAM_CHANNELS) + champsim::lg2(DRAM_BANKS);
+  //return((address >> shift) & champsim::bitmask(champsim::lg2(COLUMNS)));
 }
 
 unsigned long DRAM_CHANNEL::get_rank(uint64_t address) const

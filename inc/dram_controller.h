@@ -69,7 +69,8 @@ struct DRAM_CHANNEL final : public champsim::operable {
   using queue_type = std::vector<std::optional<value_type>>;
   queue_type WQ{DRAM_WQ_SIZE};
   queue_type RQ{DRAM_RQ_SIZE};
-
+  uint64_t bank_util = 0;
+  uint64_t last_bank_util = 0;
   HammerCounter HC;
   // these values control when to send out a burst of writes
   constexpr static std::size_t DRAM_WRITE_HIGH_WM = ((DRAM_WQ_SIZE * 7) >> 3);         // 7/8th
