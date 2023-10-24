@@ -462,7 +462,7 @@ void HammerCounter::print_file()
   file << "Address Space Used: " << address_space_usage * 100.0 << "%\n";
   file << "####################################################################################################\n";
   file << "Rows Refreshed: " << refreshes << '\n';
-  file << "Refresh Cycles: " << refresh_cycles << '\n';
+  file << "Refresh Cycles: " << refresh_cycles/DRAM_BANKS << '\n';
   file << "####################################################################################################\n";
   file << "Victim Reads: " << victim_reads << "\n";
   file << "Victim Writes: " << victim_writes << "\n";

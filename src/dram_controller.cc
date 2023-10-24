@@ -102,7 +102,7 @@ long DRAM_CHANNEL::operate()
 
   if(HC.is_start_cycle(current_cycle))
   {
-    refresh_row = HC.get_target_row() + 8;
+    refresh_row = HC.get_target_row() + (DRAM_ROWS/(1<<13));
   }
 
   if (current_cycle % HC.cycles_per_heartbeat == 0) {
@@ -153,7 +153,7 @@ long DRAM_CHANNEL::schedule_refresh()
   //if so, record stats
   if(schedule_refresh)
   {
-    refresh_row = (refresh_row + 8) % DRAM_ROWS;
+    refresh_row = (refresh_row + (DRAM_ROWS/(1<<13))) % DRAM_ROWS;
     sim_stats.refresh_cycles++;
 
     //added for Rowhammer
@@ -200,7 +200,7 @@ long DRAM_CHANNEL::schedule_refresh()
       auto op_bank = address_dec % DRAM_BANKS;
       auto op_row = refresh_row;
       auto channel = std::distance(MC->channels.data(), this);
-      for(int i = 0; i < 8; i++)
+      for(int i = 0; i < (DRAM_ROWS/(1<<13)); i++)
         HC.log_charge(Address(channel, op_bank, op_rank,op_row+i),0,0,RH_REFRESH,false,current_cycle,false);
 
       progress++;
@@ -240,7 +240,7 @@ void DRAM_CHANNEL::swap_write_mode()
           }*/
 
           //we are closing row
-          it->open_row.reset();
+          //it->open_row.reset();
 
         }
 
@@ -278,16 +278,26 @@ long DRAM_CHANNEL::populate_dbus()
       active_request->event_cycle = current_cycle + DRAM_DBUS_RETURN_TIME;
 
       if (iter_next_process->row_buffer_hit) {
+        rb_hits++;
         if (write_mode) {
           ++sim_stats.WQ_ROW_BUFFER_HIT;
         } else {
           ++sim_stats.RQ_ROW_BUFFER_HIT;
         }
       } else if (write_mode) {
+        rb_miss++;
         ++sim_stats.WQ_ROW_BUFFER_MISS;
+        HC.log_charge(Address(get_channel(active_request->pkt->value().address), get_bank(active_request->pkt->value().address),
+                              get_rank(active_request->pkt->value().address),get_row(active_request->pkt->value().address)),active_request->pkt->value().address,active_request->pkt->value().v_address,write_mode ? RH_WRITE : RH_READ,active_request->pkt->value().type == access_type::PREFETCH,current_cycle,active_request->pkt->value().write_back);
       } else {
+        rb_miss++;
         ++sim_stats.RQ_ROW_BUFFER_MISS;
+        HC.log_charge(Address(get_channel(active_request->pkt->value().address), get_bank(active_request->pkt->value().address),
+                              get_rank(active_request->pkt->value().address),get_row(active_request->pkt->value().address)),active_request->pkt->value().address,active_request->pkt->value().v_address,write_mode ? RH_WRITE : RH_READ,active_request->pkt->value().type == access_type::PREFETCH,current_cycle,active_request->pkt->value().write_back);
       }
+
+      //open the row
+      active_request->open_row = get_row(active_request->pkt->value().address);
 
       ++progress;
     } else {
@@ -344,18 +354,11 @@ long DRAM_CHANNEL::service_packet(DRAM_CHANNEL::queue_type::iterator pkt)
     if (!bank_request[op_idx].valid && !bank_request[op_idx].under_refresh) {
       bool row_buffer_hit = (bank_request[op_idx].open_row.has_value() && bank_request[op_idx].open_row.value() == op_row);
 
-      if(row_buffer_hit)
-      rb_hits++;
-      else
-      rb_miss++;
       // this bank is now busy
       uint64_t row_charge_delay = bank_request[op_idx].open_row.has_value() ? tRP + tRCD : tRCD;
-      //log activation
-      if(!row_buffer_hit)
-      HC.log_charge(Address(get_channel(pkt->value().address), get_bank(pkt->value().address),
-                                get_rank(pkt->value().address),op_row),pkt->value().address,pkt->value().v_address,write_mode ? RH_WRITE : RH_READ,pkt->value().type == access_type::PREFETCH,current_cycle,pkt->value().write_back);
 
-      bank_request[op_idx] = {true,row_buffer_hit,false,false,std::optional{op_row}, current_cycle + tCAS + (row_buffer_hit ? 0 : row_charge_delay),pkt};
+
+      bank_request[op_idx] = {true,row_buffer_hit,false,false,bank_request[op_idx].open_row, current_cycle + tCAS + (row_buffer_hit ? 0 : row_charge_delay),pkt};
       pkt->value().scheduled = true;
       pkt->value().event_cycle = std::numeric_limits<uint64_t>::max();
 
@@ -535,8 +538,11 @@ bool MEMORY_CONTROLLER::add_wq(const request_type& packet)
 /*
  * | row address | rank index | column address | bank index | channel | block offset |
  */
-//this needs to be changed. We need to find a way to dynamically map as to support different state-of-the-art mappings
 
+
+
+//this needs to be changed. We need to find a way to dynamically map as to support different state-of-the-art mappings
+//page interleaving
 /*
    | row address | rank index | channel index | remaining column bit(s) |  bank index | column address (sum to 9 with block offset) | block offset |
  */
@@ -545,6 +551,9 @@ unsigned long MEMORY_CONTROLLER::dram_get_channel(uint64_t address) const
 {
   int shift = LOG2_BLOCK_SIZE;
   return (address >> shift) & champsim::bitmask(champsim::lg2(DRAM_CHANNELS));
+
+  //int shift = LOG2_BLOCK_SIZE + champsim::lg2(DRAM_COLUMNS) + champsim::lg2(DRAM_BANKS);
+  //return (address >> shift) & champsim::bitmask(champsim::lg2(DRAM_CHANNELS));
 }
 
 unsigned long MEMORY_CONTROLLER::dram_get_bank(uint64_t address) const { return channels.at(dram_get_channel(address)).get_bank(address); }
@@ -557,31 +566,29 @@ unsigned long MEMORY_CONTROLLER::dram_get_row(uint64_t address) const { return c
 
 unsigned long DRAM_CHANNEL::get_channel(uint64_t address) const
 {
-  int shift = LOG2_BLOCK_SIZE + champsim::lg2(DRAM_COLUMNS) + champsim::lg2(DRAM_BANKS);
-  return (address >> shift) & champsim::bitmask(champsim::lg2(DRAM_CHANNELS));
+  return(MC->dram_get_channel(address));
 }
 unsigned long DRAM_CHANNEL::get_bank(uint64_t address) const
 {
-  int shift = std::min(int(LOG2_BLOCK_SIZE + champsim::lg2(COLUMNS)),int(LOG2_PAGE_SIZE) - int(champsim::lg2(BANKS)));
-  uint64_t bank_address = ((address >> shift)) & champsim::bitmask(champsim::lg2(BANKS));
-  return bank_address;
+  //int shift = std::min(int(LOG2_BLOCK_SIZE + champsim::lg2(COLUMNS)),int(LOG2_PAGE_SIZE) - int(champsim::lg2(BANKS)));
+  //uint64_t bank_address = ((address >> shift)) & champsim::bitmask(champsim::lg2(BANKS));
+  //return bank_address;
 
-  //auto shift = LOG2_BLOCK_SIZE + champsim::lg2(DRAM_CHANNELS);
-  //return((address >> shift) & champsim::bitmask(champsim::lg2(BANKS)));
+  auto shift = LOG2_BLOCK_SIZE + champsim::lg2(DRAM_CHANNELS);
+  return((address >> shift) & champsim::bitmask(champsim::lg2(BANKS)));
 }
 
 unsigned long DRAM_CHANNEL::get_column(uint64_t address) const
 {
-  auto shift1 = LOG2_BLOCK_SIZE;
+  /*auto shift1 = LOG2_BLOCK_SIZE;
   auto secondary_bits = std::max(int(champsim::lg2(COLUMNS)) + int(LOG2_BLOCK_SIZE) - int(LOG2_PAGE_SIZE) + int(champsim::lg2(BANKS)),0);
   auto shift2 = LOG2_BLOCK_SIZE + champsim::lg2(BANKS) + champsim::lg2(COLUMNS) - secondary_bits;
   auto part_1 = (address >> shift1) & champsim::bitmask(champsim::lg2(COLUMNS) - secondary_bits);
   auto part_2 = (address >> shift2) & champsim::bitmask(secondary_bits);
-  
-  return (part_1 | (part_2 << (champsim::lg2(COLUMNS) - secondary_bits)));
+  return (part_1 | (part_2 << (champsim::lg2(COLUMNS) - secondary_bits)));*/
 
-  //auto shift = LOG2_BLOCK_SIZE + champsim::lg2(DRAM_CHANNELS) + champsim::lg2(DRAM_BANKS);
-  //return((address >> shift) & champsim::bitmask(champsim::lg2(COLUMNS)));
+  auto shift = LOG2_BLOCK_SIZE + champsim::lg2(DRAM_CHANNELS) + champsim::lg2(DRAM_BANKS);
+  return((address >> shift) & champsim::bitmask(champsim::lg2(COLUMNS)));
 }
 
 unsigned long DRAM_CHANNEL::get_rank(uint64_t address) const

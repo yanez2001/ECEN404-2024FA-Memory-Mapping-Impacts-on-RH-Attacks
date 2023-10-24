@@ -91,16 +91,6 @@ void VirtualMemory::ppage_pop()
 
 std::size_t VirtualMemory::available_ppages() const { return ppage_free_list.size(); }
 
-uint64_t translate_xor(uint64_t vaddress, uint64_t address)
-{
-  uint64_t bank_addr_mod = (vaddress >> 17) & champsim::bitmask(champsim::lg2(DRAM_BANKS));
-  uint64_t final_address = address ^ (bank_addr_mod << (LOG2_PAGE_SIZE - champsim::lg2(DRAM_BANKS)));
-
-  //fmt::print("translated {:#x} to {:#x}\n",address,final_address);
-  return(final_address);
-
-}
-
 std::pair<uint64_t, uint64_t> VirtualMemory::va_to_pa(uint32_t cpu_num, uint64_t vaddr)
 {
   auto [ppage, fault] = vpage_to_ppage_map.insert({{cpu_num, vaddr >> LOG2_PAGE_SIZE}, ppage_front()});
@@ -111,8 +101,6 @@ std::pair<uint64_t, uint64_t> VirtualMemory::va_to_pa(uint32_t cpu_num, uint64_t
 
   auto paddr = champsim::splice_bits(ppage->second, vaddr, LOG2_PAGE_SIZE);
 
-  //implement XOR scheme here
-  //paddr = translate_xor(vaddr,paddr);
   if constexpr (champsim::debug_print) {
     fmt::print("[VMEM] {} paddr: {:x} vaddr: {:x} fault: {}\n", __func__, paddr, vaddr, fault);
   }
@@ -133,7 +121,7 @@ std::pair<uint64_t, uint64_t> VirtualMemory::get_pte_pa(uint32_t cpu_num, uint64
 
   // this PTE doesn't yet have a mapping
   if (fault) {
-    next_pte_page += 8;
+    next_pte_page += pte_page_size;
     if (!(next_pte_page % PAGE_SIZE)) {
       next_pte_page = ppage_front();
       ppage_pop();
@@ -143,8 +131,6 @@ std::pair<uint64_t, uint64_t> VirtualMemory::get_pte_pa(uint32_t cpu_num, uint64
   auto offset = get_offset(vaddr, level);
   auto paddr = champsim::splice_bits(ppage->second, offset * PTE_BYTES, champsim::lg2(pte_page_size));
 
-  //implement xor scheme here
-  //paddr = translate_xor(vaddr,paddr);
 
   if constexpr (champsim::debug_print) {
     fmt::print("[VMEM] {} paddr: {:x} vaddr: {:x} pt_page_offset: {} translation_level: {} fault: {}\n", __func__, paddr, vaddr, offset, level, fault);
