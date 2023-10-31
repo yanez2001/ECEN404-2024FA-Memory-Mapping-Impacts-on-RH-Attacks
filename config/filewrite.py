@@ -97,7 +97,7 @@ class FileWriter:
 
         joined_module_info = util.subdict(util.chain(*module_info.values()), modules_to_compile) # remove module type tag
         self.fileparts.extend((os.path.join(inc_dir, m['name'] + '.inc'), get_map_lines(util.chain(m['func_map'], m.get('deprecated_func_map', {})))) for m in joined_module_info.values())
-        self.fileparts.append((makefile_file_name, makefile.get_makefile_lines(local_objdir_name, build_id, os.path.normpath(os.path.join(local_bindir_name, executable)), local_srcdir_names, joined_module_info, env)))
+        self.fileparts.append((makefile_file_name, makefile.get_makefile_lines(local_objdir_name, build_id, os.path.normpath(os.path.join(local_bindir_name, executable)), local_srcdir_names, joined_module_info, env,elements["pmem"])))
 
     def finish(self):
         for fname, fcontents in itertools.groupby(sorted(self.fileparts, key=operator.itemgetter(0)), key=operator.itemgetter(0)):

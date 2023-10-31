@@ -119,7 +119,7 @@ def module_opts(obj_dir, build_id, module_name, source_dirs, opts):
 
     return dir_varnames, obj_varnames
 
-def get_makefile_lines(objdir, build_id, executable, source_dirs, module_info, config_file):
+def get_makefile_lines(objdir, build_id, executable, source_dirs, module_info, config_file,pmem):
     executable_path = os.path.abspath(executable)
 
     dir_varnames, obj_varnames = yield from executable_opts(os.path.abspath(objdir), build_id, executable_path, source_dirs)
@@ -130,9 +130,13 @@ def get_makefile_lines(objdir, build_id, executable, source_dirs, module_info, c
         obj_varnames.extend(module_obj_varnames)
 
     global_overrides = util.subdict(config_file, ('CXX',))
+
     yield from (assign_variable(*kv, targets=[dereference(x) for x in dir_varnames]) for kv in global_overrides.items())
 
     global_opts = util.subdict(config_file, ('CPPFLAGS', 'CXXFLAGS', 'LDFLAGS', 'LDLIBS'))
     yield from (append_variable(*kv, targets=[dereference(x) for x in obj_varnames]) for kv in each_in_dict_list(global_opts))
     yield ''
+
+    if pmem['model'] == 'ramulator':
+        yield assign_variable('RAMULATOR_MODEL', '1')
 

@@ -23,7 +23,7 @@ namespace champsim
 class operable
 {
 public:
-  const double CLOCK_SCALE;
+  double CLOCK_SCALE;
 
   double leap_operation = 0;
   uint64_t current_cycle = 0;

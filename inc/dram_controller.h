@@ -33,6 +33,22 @@
 
 #include "hammer_counter.h"
 
+#ifdef RAMULATOR
+#include "../ramulator2/src/base/base.h"
+#include "../ramulator2/src/base/request.h"
+#include "../ramulator2/src/base/config.h"
+#include "../ramulator2/src/frontend/frontend.h"
+#include "../ramulator2/src/memory_system/memory_system.h"
+
+#include <map>
+namespace ramulator
+{
+  class Request;
+  class MemoryBase;
+}
+#endif
+
+
 struct ooo_model_instr;
 class MEMORY_CONTROLLER;
 struct dram_stats {
@@ -135,6 +151,29 @@ struct DRAM_CHANNEL final : public champsim::operable {
   unsigned long get_column(uint64_t address) const;
 };
 
+#ifdef RAMULATOR
+
+  namespace Ramulator {
+
+    //here is our frontend type
+    class ChampSimRamulator : public IFrontEnd, public Implementation {
+    RAMULATOR_REGISTER_IMPLEMENTATION(IFrontEnd, ChampSimRamulator, "ChampSim", "ChampSim frontend.")
+
+    public:
+      void init() override { };
+      void tick() override { };
+
+      bool receive_external_requests(int req_type_id, Addr_t addr, int source_id, std::function<void(Request&)> callback) override {
+        return m_memory_system->send({addr, req_type_id, source_id, callback});
+      }
+
+    private:
+      bool is_finished() override { return true; };
+    };
+  }
+
+#endif
+
 class MEMORY_CONTROLLER : public champsim::operable
 {
   using channel_type = champsim::channel;
@@ -146,6 +185,22 @@ class MEMORY_CONTROLLER : public champsim::operable
   bool add_rq(const request_type& packet, champsim::channel* ul);
   bool add_wq(const request_type& packet);
 
+  #ifdef RAMULATOR
+  Ramulator::IFrontEnd* ramulator2_frontend;
+  Ramulator::IMemorySystem* ramulator2_memorysystem;
+
+  struct RAMULATOR_Q_ENTRY
+  {
+    long addr;
+    DRAM_CHANNEL::request_type pkt;
+  };
+  //queue needed to manage packet return requests
+  std::vector<RAMULATOR_Q_ENTRY> RAMULATOR_RQ;
+
+  template <typename T>
+  ramulator::MemoryBase* create_memory_controller();
+  #endif
+  
 public:
   std::vector<DRAM_CHANNEL> channels;
 

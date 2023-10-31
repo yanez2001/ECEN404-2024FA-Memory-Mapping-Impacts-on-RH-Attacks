@@ -39,9 +39,30 @@ MEMORY_CONTROLLER::MEMORY_CONTROLLER(double freq_scale, int io_freq, double t_rp
                                      std::vector<channel_type*>&& ul)
     : champsim::operable(freq_scale), queues(std::move(ul))
 {
+  #ifdef RAMULATOR
+  YAML::Node config;
+
+  //this line can be used to read in the config as a file (this might be easier and more intuitive for users familiar with Ramulator)
+  //the full file path should be included, otherwise Ramulator looks in the current working directory (BAD)
+  config = Ramulator::Config::parse_config_file(RAMULATOR_CONFIG, {});
+
+  //create our frontend (us) and the memory system (ramulator)
+  ramulator2_frontend = Ramulator::Factory::create_frontend(config);
+  ramulator2_memorysystem = Ramulator::Factory::create_memory_system(config);
+
+  //connect the two. we can use this connection to get some more information from ramulator
+  ramulator2_frontend->connect_memory_system(ramulator2_memorysystem);
+  ramulator2_memorysystem->connect_frontend(ramulator2_frontend);
+
+  //correct clock scale for ramulator2 frequency. Looks like this may point to an inaccuracy in our own model:
+  //although the data bus is running at freq f, the memory controller runs at half this (f/2). This is where "DDR" gets its name
+  CLOCK_SCALE = ((ramulator2_memorysystem->get_tCK() / (1000.0/double(DRAM_IO_FREQ)))*(CLOCK_SCALE+1.0)) - 1.0;
+
+  #else
   for (std::size_t i{0}; i < DRAM_CHANNELS; ++i) {
     channels.emplace_back(io_freq, t_rp, t_rcd, t_cas, turnaround, DRAM_ROWS, DRAM_COLUMNS, DRAM_RANKS, DRAM_BANKS,this);
   }
+  #endif
 }
 
 DRAM_CHANNEL::DRAM_CHANNEL(int io_freq, double t_rp, double t_rcd, double t_cas, double turnaround, std::size_t rows, std::size_t columns, std::size_t ranks,
@@ -58,10 +79,18 @@ long MEMORY_CONTROLLER::operate()
 
   initiate_requests();
 
+  #ifdef RAMULATOR
+  //tick ramulator.
+  //we will assume no deadlock, since there are no other ways to measure progress
+  ramulator2_memorysystem->tick();
+  progress = 1;
+  #else
   for (auto& channel : channels) {
     progress += channel._operate();
   }
+  #endif
 
+  
   return progress;
 }
 
@@ -178,19 +207,6 @@ long DRAM_CHANNEL::schedule_refresh()
     //refresh is done for this bank
     else if(it->under_refresh && it->event_cycle <= current_cycle)
     {
-      //log the charge of the previous bank, and the next bank
-      /*if(it->open_row.has_value())
-      {
-        auto address_dec = std::distance(bank_request.begin(),it);
-        auto op_rank = address_dec / DRAM_BANKS;
-        auto op_bank = address_dec % DRAM_BANKS;
-        auto op_row = it->open_row.value();
-
-        auto channel = std::distance(MC->channels.data(), this);
-        HC.log_charge(Address(channel, op_bank,
-                            op_rank,op_row),RH_REFRESH,false,current_cycle,false);
-
-      }*/
       it->under_refresh = false;
       it->open_row.reset();
       
@@ -371,6 +387,10 @@ long DRAM_CHANNEL::service_packet(DRAM_CHANNEL::queue_type::iterator pkt)
 
 void MEMORY_CONTROLLER::initialize()
 {
+  #ifdef RAMULATOR
+  //ramulator will print this information out upon startup. We might be able to derive size somehow
+  fmt::print("Refer to Ramulator configuration for Off-chip DRAM Size and Configuration\n");
+  #else
   long long int dram_size = DRAM_CHANNELS * DRAM_RANKS * DRAM_BANKS * DRAM_ROWS * DRAM_COLUMNS * BLOCK_SIZE / 1024 / 1024; // in MiB
   fmt::print("Off-chip DRAM Size: ");
   if (dram_size > 1024) {
@@ -379,6 +399,7 @@ void MEMORY_CONTROLLER::initialize()
     fmt::print("{} MiB", dram_size);
   }
   fmt::print(" Channels: {} Width: {}-bit Data Race: {} MT/s\n", DRAM_CHANNELS, 8 * DRAM_CHANNEL_WIDTH, DRAM_IO_FREQ);
+  #endif
 }
 
 void DRAM_CHANNEL::initialize() {}
@@ -405,6 +426,15 @@ void DRAM_CHANNEL::begin_phase() {}
 
 void MEMORY_CONTROLLER::end_phase(unsigned cpu)
 {
+  #ifdef RAMULATOR
+  //this happens to also print stats. We should probably disable the first phase printout and reset stats?
+  if(!warmup)
+  {
+    ramulator2_frontend->finalize();
+    ramulator2_memorysystem->finalize();
+  }
+  #endif
+
   for (auto& chan : channels) {
     chan.end_phase(cpu);
   }
@@ -500,27 +530,89 @@ DRAM_CHANNEL::request_type::request_type(const typename champsim::channel::reque
 
 bool MEMORY_CONTROLLER::add_rq(const request_type& packet, champsim::channel* ul)
 {
-  auto& channel = channels[dram_get_channel(packet.address)];
+  #ifdef RAMULATOR
+  //return handler, to make sure packet responses get delivered
+  std::function<void(Ramulator::Request&)> return_packet_rq_rr = [this](Ramulator::Request& req)
+  {
+    for(auto it = RAMULATOR_RQ.begin(); it != RAMULATOR_RQ.end(); it++)
+    {
+      if(it->addr == req.addr)
+      {
+        response_type response{it->pkt.address, it->pkt.v_address, it->pkt.data,
+                              it->pkt.pf_metadata, it->pkt.instr_depend_on_me};
 
-  // Find empty slot
-  if (auto rq_it = std::find_if_not(std::begin(channel.RQ), std::end(channel.RQ), [](const auto& pkt) { return pkt.has_value(); });
-      rq_it != std::end(channel.RQ)) {
-    *rq_it = DRAM_CHANNEL::request_type{packet};
-    rq_it->value().forward_checked = false;
-    rq_it->value().event_cycle = current_cycle;
-    if (packet.response_requested) {
-      rq_it->value().to_return = {&ul->returned};
+        for (auto* ret : it->pkt.to_return) {
+          ret->push_back(response);
+        }
+        RAMULATOR_RQ.erase(it);
+        break;
+      }
+    }
+  };
+  //if packet needs response, we need to track its data to return later
+  if(!warmup)
+  {
+    //if not warmup
+    if(packet.response_requested)
+    {
+      DRAM_CHANNEL::request_type pkt = DRAM_CHANNEL::request_type{packet};
+      pkt.to_return = {&ul->returned};
+      bool success = ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), packet.address, packet.cpu, return_packet_rq_rr);
+      if(success)
+      RAMULATOR_RQ.emplace(RAMULATOR_RQ.end(),RAMULATOR_Q_ENTRY{packet.address,pkt});
+
+      return(success);
+    }
+    else
+    {
+      //otherwise feed to ramulator directly with no response requested
+      return(ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), packet.address, packet.cpu,[this](Ramulator::Request& req){}));
+    }
+  }
+  else
+  {
+    //if warmup, just return true and send necessary responses
+    if(packet.response_requested)
+    {
+        response_type response{packet.address, packet.v_address, packet.data,
+                              packet.pf_metadata, packet.instr_depend_on_me};
+        for (auto* ret : {&ul->returned}) {
+          ret->push_back(response);
+        }
+    }
+    return(true);
+  }
+    #else
+    auto& channel = channels[dram_get_channel(packet.address)];
+
+    // Find empty slot
+    if (auto rq_it = std::find_if_not(std::begin(channel.RQ), std::end(channel.RQ), [](const auto& pkt) { return pkt.has_value(); });
+        rq_it != std::end(channel.RQ)) {
+      *rq_it = DRAM_CHANNEL::request_type{packet};
+      rq_it->value().forward_checked = false;
+      rq_it->value().event_cycle = current_cycle;
+      if (packet.response_requested) {
+        rq_it->value().to_return = {&ul->returned};
+      }
+
+      return true;
     }
 
-    return true;
-  }
-
-  return false;
+    return false;
+  #endif
 }
 
 bool MEMORY_CONTROLLER::add_wq(const request_type& packet)
 {
+
+  #ifdef RAMULATOR
+  //if ramulator, feed directly. Since its a write, no response is needed
+  if(!warmup)
+  return(ramulator2_frontend->receive_external_requests(Ramulator::Request::Type::Write, packet.address, packet.cpu, [this](Ramulator::Request& req){}));
+  return(true);
+  #else
   auto& channel = channels[dram_get_channel(packet.address)];
+
   // search for the empty index
   if (auto wq_it = std::find_if_not(std::begin(channel.WQ), std::end(channel.WQ), [](const auto& pkt) { return pkt.has_value(); });
       wq_it != std::end(channel.WQ)) {
@@ -533,6 +625,7 @@ bool MEMORY_CONTROLLER::add_wq(const request_type& packet)
 
   ++channel.sim_stats.WQ_FULL;
   return false;
+  #endif
 }
 
 /*

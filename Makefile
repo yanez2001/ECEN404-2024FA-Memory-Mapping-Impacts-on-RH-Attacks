@@ -9,6 +9,9 @@ CPPFLAGS += -isystem $(TRIPLET_DIR)/include
 LDFLAGS  += -L$(TRIPLET_DIR)/lib -L$(TRIPLET_DIR)/lib/manual-link
 LDLIBS   += -llzma -lz -lbz2 -lfmt
 
+RAMULATOR_DIR=$(ROOT_DIR)/ramulator2/
+RAMULATOR_LIB=$(RAMULATOR_DIR)
+
 .phony: all all_execs clean configclean test makedirs
 
 test_main_name=$(ROOT_DIR)/test/bin/000-test-main
@@ -23,6 +26,12 @@ all: all_execs
 #  - $(module_objs), the list of all object files corresponding to modules
 #  - All dependencies and flags assigned according to the modules
 include _configuration.mk
+
+#if ramulator exists include the library as well as the compile flags
+ifeq ($(RAMULATOR_MODEL),1)
+LDLIBS := -L$(RAMULATOR_LIB) -L$(RAMULATOR_DIR)deps/spdlog-build -L$(RAMULATOR_DIR)deps/yaml-cpp-build -lramulator -lspdlog -lyaml-cpp $(LDLIBS)
+OUTPUT_OPTION += -DRAMULATOR -I$(RAMULATOR_DIR)/src
+endif
 
 all_execs: $(filter-out $(test_main_name), $(executable_name))
 

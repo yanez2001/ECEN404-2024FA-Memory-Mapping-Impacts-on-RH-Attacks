@@ -34,5 +34,6 @@ def get_constants_file(env, pmem):
         'constexpr std::size_t DRAM_CHANNEL_WIDTH = {channel_width};'.format(**pmem),
         'constexpr std::size_t DRAM_WQ_SIZE = {wq_size};'.format(**pmem),
         'constexpr std::size_t DRAM_RQ_SIZE = {rq_size};'.format(**pmem),
+        f'constexpr char RAMULATOR_CONFIG[] = "{pmem["ramulator_config"]}";' if pmem["model"] == "ramulator" else '',
         '#endif')
 
