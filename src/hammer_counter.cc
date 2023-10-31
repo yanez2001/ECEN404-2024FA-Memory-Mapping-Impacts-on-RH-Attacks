@@ -1,8 +1,9 @@
 #include "../inc/hammer_counter.h"
 #include <iostream>
 
-std::string HammerCounter::output_f = "hammer";
 
+std::string HammerCounter::output_f = "hammer";
+uint64_t HammerCounter::processed_packets = 0;
 uint64_t HammerCounter::target_row = 0;
 uint64_t HammerCounter::target_cycle = 0;
 
@@ -79,6 +80,12 @@ bool Count::operator<(Count& b) { return (highest.hammer_count < b.highest.hamme
 
 HammerCounter::HammerCounter()
 {
+  dram_rows = DRAM_ROWS;
+  dram_columns = DRAM_COLUMNS;
+  dram_ranks = DRAM_RANKS;
+  dram_banks = DRAM_BANKS;
+  dram_channels = DRAM_CHANNELS;
+
   refresh_row = 0;
   row_charges_r = 0;
   row_charges_rn = 0;
@@ -119,12 +126,36 @@ int previous_type = 0;
 bool previous_pref = false;
 bool previous_wb = false;
 
+void HammerCounter::log_refresh(Address addr)
+{
+  //do refresh based off of first rank
+  if(addr.get_rank() == 0)
+  {
+    for(int i = 0; i < (dram_rows)/(1<<13); i++)
+    {
+      for(int j = 0; j < dram_banks; j++)
+      {
+        Address addr2(addr.get_channel(),j,addr.get_rank(),refresh_row+i);
+        log_charge(addr2,0,0,RH_REFRESH,false,0,false);
+      }
+    }
+    refreshes+=dram_banks;
+    refresh_row += (dram_rows)/(1<<13);
+    if(refresh_row >= dram_rows)
+    {
+      refresh_cycles++;
+      refresh_row = 0;
+    }
+  }
+    
+}
 void HammerCounter::log_charge(Address addr,uint64_t p_addr, uint64_t v_addr, int type, bool prefetch, uint64_t cycle, bool write_back)
 {
   channel_num = addr.get_channel();
   // log hit on both adjacent rows
-  Address addr_high = Address(addr.get_channel(), addr.get_bank(), addr.get_rank(), (addr.get_row() + 1) % DRAM_ROWS);
-  Address addr_low = Address(addr.get_channel(), addr.get_bank(), addr.get_rank(), (addr.get_row() == 0) ? DRAM_ROWS - 1 : addr.get_row() - 1);
+  //std::cout << addr.get_row() << "\n";
+  Address addr_high = Address(addr.get_channel(), addr.get_bank(), addr.get_rank(), (addr.get_row() + 1) % dram_rows);
+  Address addr_low = Address(addr.get_channel(), addr.get_bank(), addr.get_rank(), (addr.get_row() == 0) ? dram_rows - 1 : addr.get_row() - 1);
 
   if(addr.get_row() == target_row || addr_high.get_row() == target_row || addr_low.get_row() == target_row)
   {
@@ -164,13 +195,16 @@ void HammerCounter::log_charge(Address addr,uint64_t p_addr, uint64_t v_addr, in
   previous_pref = prefetch;
   previous_wb = write_back;
 
-  if(type == RH_REFRESH)
+  #ifdef RAMULATOR
+  #else
+ if(type == RH_REFRESH)
   {
     refreshes++;
     refresh_row = addr.get_row();
     if(refresh_row + 1 == DRAM_ROWS)
     refresh_cycles++;
   }
+  #endif
 
   // low row
   if (addr.get_row() != 0) {
@@ -249,7 +283,7 @@ void HammerCounter::log_charge(Address addr,uint64_t p_addr, uint64_t v_addr, in
   }
 
   // high row
-  if (addr.get_row() != (DRAM_ROWS - 1)) {
+  if (addr.get_row() != (dram_rows - 1)) {
     if (row_open_counter.find(addr_high) == row_open_counter.end())
     {
       row_open_counter[addr_high] = Count();
@@ -442,7 +476,7 @@ void HammerCounter::print_file()
     if(!it->second.lifetime.is_refresh_only)
     unique_rows_visited++;
   }
-  long double address_space_usage = (unique_rows_visited) / (double)(DRAM_RANKS * DRAM_BANKS * DRAM_ROWS);
+  long double address_space_usage = (unique_rows_visited) / (double)(dram_ranks * dram_banks * dram_rows * dram_channels);
   std::ofstream file;
   file.open(file_name + ".log");
   file << "ROW-HAMMER STATISTICS\n";
@@ -454,15 +488,15 @@ void HammerCounter::print_file()
   file << "Row Hammers (REFRESH INSTIGATED): " << row_charges_ref << "\n";
   file << "Total Row Hammers: " << row_charges_r + row_charges_w + row_charges_ref<< "\n";
   file << "####################################################################################################\n";
-  file << "Channels: " << DRAM_CHANNELS << "\n";
-  file << "Ranks: " << DRAM_RANKS << "\n";
-  file << "Banks: " << DRAM_BANKS << "\n";
-  file << "Rows: " << DRAM_ROWS << "\n";
-  file << "Columns: " << DRAM_COLUMNS << "\n";
+  file << "Channels: " << dram_channels << "\n";
+  file << "Ranks: " << dram_ranks << "\n";
+  file << "Banks: " << dram_banks << "\n";
+  file << "Rows: " << dram_rows << "\n";
+  file << "Columns: " << dram_columns << "\n";
   file << "Address Space Used: " << address_space_usage * 100.0 << "%\n";
   file << "####################################################################################################\n";
   file << "Rows Refreshed: " << refreshes << '\n';
-  file << "Refresh Cycles: " << refresh_cycles/DRAM_BANKS << '\n';
+  file << "Refresh Cycles: " << refresh_cycles/dram_banks << '\n';
   file << "####################################################################################################\n";
   file << "Victim Reads: " << victim_reads << "\n";
   file << "Victim Writes: " << victim_writes << "\n";

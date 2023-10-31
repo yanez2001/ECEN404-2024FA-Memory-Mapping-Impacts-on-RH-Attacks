@@ -546,6 +546,8 @@ bool MEMORY_CONTROLLER::add_rq(const request_type& packet, champsim::channel* ul
         }
         RAMULATOR_RQ.erase(it);
         break;
+
+        HammerCounter::processed_packets += 1;
       }
     }
   };
@@ -557,7 +559,7 @@ bool MEMORY_CONTROLLER::add_rq(const request_type& packet, champsim::channel* ul
     {
       DRAM_CHANNEL::request_type pkt = DRAM_CHANNEL::request_type{packet};
       pkt.to_return = {&ul->returned};
-      bool success = ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), packet.address, packet.cpu, return_packet_rq_rr);
+      bool success = ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), int64_t(packet.address), packet.cpu, return_packet_rq_rr);
       if(success)
       RAMULATOR_RQ.emplace(RAMULATOR_RQ.end(),RAMULATOR_Q_ENTRY{packet.address,pkt});
 
@@ -566,7 +568,9 @@ bool MEMORY_CONTROLLER::add_rq(const request_type& packet, champsim::channel* ul
     else
     {
       //otherwise feed to ramulator directly with no response requested
-      return(ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), packet.address, packet.cpu,[this](Ramulator::Request& req){}));
+      bool success = (ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), int64_t(packet.address), packet.cpu,[this](Ramulator::Request& req){}));
+      HammerCounter::processed_packets += success ? 1 : 0;
+      return(success);
     }
   }
   else
@@ -608,7 +612,11 @@ bool MEMORY_CONTROLLER::add_wq(const request_type& packet)
   #ifdef RAMULATOR
   //if ramulator, feed directly. Since its a write, no response is needed
   if(!warmup)
-  return(ramulator2_frontend->receive_external_requests(Ramulator::Request::Type::Write, packet.address, packet.cpu, [this](Ramulator::Request& req){}));
+  {
+    bool success = (ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Write), int64_t(packet.address), packet.cpu, [this](Ramulator::Request& req){}));
+    HammerCounter::processed_packets += success ? 1 : 0;
+    return(success);
+  }
   return(true);
   #else
   auto& channel = channels[dram_get_channel(packet.address)];
@@ -715,7 +723,7 @@ void DRAM_CHANNEL::print_deadlock()
     return std::tuple{entry->address, entry->v_address};
   };
 
-  champsim::range_print_deadlock(RQ, "RQ", q_writer, q_entry_pack);
-  champsim::range_print_deadlock(WQ, "WQ", q_writer, q_entry_pack);
+  //champsim::range_print_deadlock(RQ, "RQ", q_writer, q_entry_pack);
+  //champsim::range_print_deadlock(WQ, "WQ", q_writer, q_entry_pack);
 }
 // LCOV_EXCL_STOP

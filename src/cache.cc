@@ -787,9 +787,9 @@ void CACHE::print_deadlock()
     return std::tuple{entry.instr_id, entry.address, entry.v_address, entry.is_translated, entry.translate_issued, entry.event_cycle};
   };
 
-  champsim::range_print_deadlock(MSHR, NAME + "_MSHR", mshr_write, mshr_pack);
-  champsim::range_print_deadlock(inflight_tag_check, NAME + "_tags", tag_check_write, tag_check_pack);
-  champsim::range_print_deadlock(translation_stash, NAME + "_translation", tag_check_write, tag_check_pack);
+  //champsim::range_print_deadlock(MSHR, NAME + "_MSHR", mshr_write, mshr_pack);
+  //champsim::range_print_deadlock(inflight_tag_check, NAME + "_tags", tag_check_write, tag_check_pack);
+  //champsim::range_print_deadlock(translation_stash, NAME + "_translation", tag_check_write, tag_check_pack);
 
   std::string_view q_writer{"instr_id: {} address: {:#x} v_addr: {:#x} type: {} translated: {}"};
   auto q_entry_pack = [](const auto& entry) {
@@ -797,9 +797,9 @@ void CACHE::print_deadlock()
   };
 
   for (auto* ul : upper_levels) {
-    champsim::range_print_deadlock(ul->RQ, NAME + "_RQ", q_writer, q_entry_pack);
-    champsim::range_print_deadlock(ul->WQ, NAME + "_WQ", q_writer, q_entry_pack);
-    champsim::range_print_deadlock(ul->PQ, NAME + "_PQ", q_writer, q_entry_pack);
+    //champsim::range_print_deadlock(ul->RQ, NAME + "_RQ", q_writer, q_entry_pack);
+    //champsim::range_print_deadlock(ul->WQ, NAME + "_WQ", q_writer, q_entry_pack);
+    //champsim::range_print_deadlock(ul->PQ, NAME + "_PQ", q_writer, q_entry_pack);
   }
 }
 // LCOV_EXCL_STOP
