@@ -39,6 +39,8 @@
 #include "../ramulator2/src/base/config.h"
 #include "../ramulator2/src/frontend/frontend.h"
 #include "../ramulator2/src/memory_system/memory_system.h"
+#include "dram/dram.h"
+#include "addr_mapper/addr_mapper.h"
 
 #include <map>
 namespace ramulator
@@ -188,6 +190,7 @@ class MEMORY_CONTROLLER : public champsim::operable
   #ifdef RAMULATOR
   Ramulator::IFrontEnd* ramulator2_frontend;
   Ramulator::IMemorySystem* ramulator2_memorysystem;
+  YAML::Node config;
 
   struct RAMULATOR_Q_ENTRY
   {

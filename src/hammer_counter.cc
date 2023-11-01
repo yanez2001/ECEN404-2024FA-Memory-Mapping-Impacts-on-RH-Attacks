@@ -131,12 +131,15 @@ void HammerCounter::log_refresh(Address addr)
   //do refresh based off of first rank
   if(addr.get_rank() == 0)
   {
-    for(int i = 0; i < (dram_rows)/(1<<13); i++)
+    for(int k = 0; k < (dram_ranks); k++)
     {
-      for(int j = 0; j < dram_banks; j++)
+      for(int i = 0; i < (dram_rows)/(1<<13); i++)
       {
-        Address addr2(addr.get_channel(),j,addr.get_rank(),refresh_row+i);
-        log_charge(addr2,0,0,RH_REFRESH,false,0,false);
+        for(int j = 0; j < dram_banks; j++)
+        {
+          Address addr2(addr.get_channel(),j,k,refresh_row+i);
+          log_charge(addr2,0,0,RH_REFRESH,false,0,false);
+        }
       }
     }
     refreshes+=dram_banks;

@@ -205,6 +205,10 @@ class HammerCounterPlugin : public IControllerPlugin, public Implementation {
       HC.set_dram_rows(m_dram->get_level_size("row"));
 
       HC.set_cycles_per_bin(uint64_t((uint64_t(m_dram->m_timing_vals("rate")) * 1000000) * 100e-6));
+
+      register_stat(rb_miss).name("total_rowbuffer_misses");
+      register_stat(rb_hits).name("total_rowbuffer_hits");
+      register_stat(last_bank_util).name("total_bytes_processed");
     };
 
     void update(bool request_found, ReqBuffer::iterator& req_it) override {
@@ -216,16 +220,14 @@ class HammerCounterPlugin : public IControllerPlugin, public Implementation {
         rb_miss++;
 
         std::string_view command = m_dram->m_commands(req_it->command);
-        if(m_dram->m_command_meta(req_it->command).is_opening && 
-          m_dram->m_command_scopes(req_it->command) == m_dram->m_levels("row")) //opened row
+        if(m_dram->m_command_meta(req_it->command).is_opening && m_dram->m_command_scopes(req_it->command) == m_dram->m_levels("row")) //opened row
         {
           uint64_t bank_count = m_dram->get_level_size("bank");
           int type = req_it->type_id == Ramulator::Request::Type::Write ? RH_WRITE : RH_READ;
           //std::cout << m_dram->m_levels("row") << "\n";
           HC.log_charge(Address(req_it->addr_vec[m_dram->m_levels("channel")], req_it->addr_vec[m_dram->m_levels("bank")] + bank_count*req_it->addr_vec[m_dram->m_levels("bankgroup")], req_it->addr_vec[m_dram->m_levels("rank")],req_it->addr_vec[m_dram->m_levels("row")]),req_it->addr,0,type,false,HC.total_cycles,req_it->type_id == Ramulator::Request::Type::Write);
         }
-        else if(m_dram->m_command_meta(req_it->command).is_refreshing && 
-          m_dram->m_command_scopes(req_it->command) == m_dram->m_levels("rank"))
+        else if(m_dram->m_command_meta(req_it->command).is_refreshing && m_dram->m_command_scopes(req_it->command) == m_dram->m_levels("rank")) //refreshed
         {
           uint64_t bank_count = m_dram->get_level_size("bank");
           HC.log_refresh(Address(req_it->addr_vec[m_dram->m_levels("channel")], req_it->addr_vec[m_dram->m_levels("bank")] + bank_count*req_it->addr_vec[m_dram->m_levels("bankgroup")], req_it->addr_vec[m_dram->m_levels("rank")],req_it->addr_vec[m_dram->m_levels("row")]));
