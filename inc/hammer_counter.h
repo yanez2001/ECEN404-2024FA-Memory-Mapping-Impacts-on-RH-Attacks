@@ -214,11 +214,13 @@ class HammerCounterPlugin : public IControllerPlugin, public Implementation {
     void update(bool request_found, ReqBuffer::iterator& req_it) override {
       if (request_found) {
 
-        if(m_dram->m_command_meta(req_it->command).is_accessing && m_dram->check_rowbuffer_hit(req_it->command,req_it->addr_vec))
-        rb_hits++;
-        else
-        rb_miss++;
-
+        if(m_dram->m_command_meta(req_it->command).is_accessing)
+        {
+          if(m_dram->check_rowbuffer_hit(req_it->command,req_it->addr_vec))
+          rb_hits++;
+          else
+          rb_miss++;
+        }
         std::string_view command = m_dram->m_commands(req_it->command);
         if(m_dram->m_command_meta(req_it->command).is_opening && m_dram->m_command_scopes(req_it->command) == m_dram->m_levels("row")) //opened row
         {
