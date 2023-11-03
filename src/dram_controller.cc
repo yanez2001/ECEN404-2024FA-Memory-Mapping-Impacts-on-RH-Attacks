@@ -562,7 +562,7 @@ bool MEMORY_CONTROLLER::add_rq(const request_type& packet, champsim::channel* ul
     {
       DRAM_CHANNEL::request_type pkt = DRAM_CHANNEL::request_type{packet};
       pkt.to_return = {&ul->returned};
-      bool success = ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), int64_t(packet.address), packet.cpu, return_packet_rq_rr);
+      bool success = ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), int64_t(packet.address), packet.type == access_type::PREFETCH ? 1 : 0, return_packet_rq_rr);
       if(success)
       RAMULATOR_RQ.emplace(RAMULATOR_RQ.end(),RAMULATOR_Q_ENTRY{packet.address,pkt});
 
@@ -571,7 +571,7 @@ bool MEMORY_CONTROLLER::add_rq(const request_type& packet, champsim::channel* ul
     else
     {
       //otherwise feed to ramulator directly with no response requested
-      bool success = (ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), int64_t(packet.address), packet.cpu,[this](Ramulator::Request& req){}));
+      bool success = (ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), int64_t(packet.address), packet.type == access_type::PREFETCH ? 1 : 0,[this](Ramulator::Request& req){}));
       HammerCounter::processed_packets += success ? 1 : 0;
       return(success);
     }
@@ -616,7 +616,7 @@ bool MEMORY_CONTROLLER::add_wq(const request_type& packet)
   //if ramulator, feed directly. Since its a write, no response is needed
   if(!warmup)
   {
-    bool success = (ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Write), int64_t(packet.address), packet.cpu, [this](Ramulator::Request& req){}));
+    bool success = (ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Write), int64_t(packet.address), 0, [this](Ramulator::Request& req){}));
     HammerCounter::processed_packets += success ? 1 : 0;
     return(success);
   }
