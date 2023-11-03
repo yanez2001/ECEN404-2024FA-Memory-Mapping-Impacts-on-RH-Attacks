@@ -216,14 +216,12 @@ class HammerCounterPlugin : public IControllerPlugin, public Implementation {
 
         if(m_dram->m_command_meta(req_it->command).is_accessing)
         {
-          if(m_dram->check_rowbuffer_hit(req_it->command,req_it->addr_vec))
           rb_hits++;
-          else
-          rb_miss++;
         }
         std::string_view command = m_dram->m_commands(req_it->command);
         if(m_dram->m_command_meta(req_it->command).is_opening && m_dram->m_command_scopes(req_it->command) == m_dram->m_levels("row")) //opened row
         {
+          rb_miss++;
           uint64_t bank_count = m_dram->get_level_size("bank");
           int type = req_it->type_id == Ramulator::Request::Type::Write ? RH_WRITE : RH_READ;
           //std::cout << m_dram->m_levels("row") << "\n";
@@ -241,8 +239,8 @@ class HammerCounterPlugin : public IControllerPlugin, public Implementation {
     if (HC.total_cycles % HC.cycles_per_heartbeat == 0) {
     // print heartbeat
     uint64_t bank_util = HammerCounter::processed_packets * 64;
-    double cum_hit_rate = (rb_hits / double(rb_hits + rb_miss));
-    double hit_rate = ((rb_hits - last_rb_hits) / double((rb_hits-last_rb_hits) + (rb_miss - last_rb_miss)));
+    double cum_hit_rate = ((rb_hits - rb_miss) / double(rb_hits));
+    double hit_rate = ((rb_hits - last_rb_hits - rb_miss + last_rb_miss) / double((rb_hits-last_rb_hits)));
 
     double throughput = (((bank_util - last_bank_util)/double(HC.cycles_per_heartbeat)) * (double)(uint64_t(m_dram->m_timing_vals("rate"))*1e6)) / double(1<<30);
     double cum_throughput = (((bank_util)/double(HC.total_cycles)) * (double)(uint64_t(m_dram->m_timing_vals("rate"))*1e6)) / double(1<<30);
