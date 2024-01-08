@@ -531,29 +531,25 @@ DRAM_CHANNEL::request_type::request_type(const typename champsim::channel::reque
   //fmt::print("added address: {}\n",address);
 }
 
+#ifdef RAMULATOR
+void MEMORY_CONTROLLER::return_packet_rq_rr(Ramulator::Request& req, DRAM_CHANNEL::request_type pkt)
+{
+  response_type response{pkt.address, pkt.v_address, pkt.data,
+                        pkt.pf_metadata, pkt.instr_depend_on_me};
+
+  for (auto* ret : pkt.to_return) {
+    ret->push_back(response);
+  }
+
+  HammerCounter::processed_packets += 1;
+  return;
+};
+#endif
+
 bool MEMORY_CONTROLLER::add_rq(const request_type& packet, champsim::channel* ul)
 {
   #ifdef RAMULATOR
   //return handler, to make sure packet responses get delivered
-  std::function<void(Ramulator::Request&)> return_packet_rq_rr = [this](Ramulator::Request& req)
-  {
-    for(auto it = RAMULATOR_RQ.begin(); it != RAMULATOR_RQ.end(); it++)
-    {
-      if(it->addr == req.addr)
-      {
-        response_type response{it->pkt.address, it->pkt.v_address, it->pkt.data,
-                              it->pkt.pf_metadata, it->pkt.instr_depend_on_me};
-
-        for (auto* ret : it->pkt.to_return) {
-          ret->push_back(response);
-        }
-        RAMULATOR_RQ.erase(it);
-        break;
-
-        HammerCounter::processed_packets += 1;
-      }
-    }
-  };
   //if packet needs response, we need to track its data to return later
   if(!warmup)
   {
@@ -562,10 +558,7 @@ bool MEMORY_CONTROLLER::add_rq(const request_type& packet, champsim::channel* ul
     {
       DRAM_CHANNEL::request_type pkt = DRAM_CHANNEL::request_type{packet};
       pkt.to_return = {&ul->returned};
-      bool success = ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), int64_t(packet.address), packet.type == access_type::PREFETCH ? 1 : 0, return_packet_rq_rr);
-      if(success)
-      RAMULATOR_RQ.emplace(RAMULATOR_RQ.end(),RAMULATOR_Q_ENTRY{packet.address,pkt});
-
+      bool success = ramulator2_frontend->receive_external_requests(int(Ramulator::Request::Type::Read), int64_t(packet.address), packet.type == access_type::PREFETCH ? 1 : 0, [=](Ramulator::Request& req) {return_packet_rq_rr(req,pkt);});
       return(success);
     }
     else
