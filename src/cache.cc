@@ -541,7 +541,7 @@ void CACHE::finish_packet(const response_type& packet)
 void CACHE::finish_translation(const response_type& packet)
 {
   auto matches_vpage = [page_num = packet.v_address >> LOG2_PAGE_SIZE](const auto& entry) {
-    return (entry.v_address >> LOG2_PAGE_SIZE) == page_num;
+    return ((entry.v_address >> LOG2_PAGE_SIZE) == page_num) && !entry.is_translated;
   };
   auto mark_translated = [p_page = packet.data, this](auto& entry) {
     entry.address = champsim::splice_bits(p_page, entry.v_address, LOG2_PAGE_SIZE); // translated address
@@ -559,7 +559,7 @@ void CACHE::finish_translation(const response_type& packet)
 
   // Find all packets that match the page of the returned packet
   for (auto& entry : inflight_tag_check) {
-    if ((entry.v_address >> LOG2_PAGE_SIZE) == (packet.v_address >> LOG2_PAGE_SIZE)) {
+    if (matches_vpage(entry)) {
       mark_translated(entry);
     }
   }
