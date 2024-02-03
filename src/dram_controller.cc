@@ -240,7 +240,7 @@ void DRAM_CHANNEL::swap_write_mode()
       if (it != active_request && it->valid) {
         // Leave rows charged
         if (it->event_cycle < (current_cycle + tCAS)) {
-
+	        it->open_row.reset();
           //log charge
           /*if(it->open_row.has_value())
           {

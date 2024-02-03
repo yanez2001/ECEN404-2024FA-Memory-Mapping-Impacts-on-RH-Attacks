@@ -50,8 +50,7 @@ void VirtualMemory::shuffle_pages()
 {
   if(virtual_seed != 0)
   {
-    std::mt19937_64 rng(virtual_seed);
-    std::shuffle(ppage_free_list.begin(),ppage_free_list.end(),rng);
+    std::shuffle(ppage_free_list.begin(),ppage_free_list.end(),std::mt19937_64{virtual_seed});
     fmt::print("Shuffled {} physical pages with seed {}\n",ppage_free_list.size(),virtual_seed);
   }
 }
