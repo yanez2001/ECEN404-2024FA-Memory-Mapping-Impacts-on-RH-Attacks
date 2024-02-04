@@ -242,8 +242,8 @@ class HammerCounterPlugin : public IControllerPlugin, public Implementation {
     double cum_hit_rate = ((rb_hits - rb_miss) / double(rb_hits));
     double hit_rate = ((rb_hits - last_rb_hits - rb_miss + last_rb_miss) / double((rb_hits-last_rb_hits)));
 
-    double throughput = (((bank_util - last_bank_util)/double(HC.cycles_per_heartbeat)) * (double)(uint64_t(m_dram->m_timing_vals("rate"))*1e6)) / double(1<<30);
-    double cum_throughput = (((bank_util)/double(HC.total_cycles)) * (double)(uint64_t(m_dram->m_timing_vals("rate"))*1e6)) / double(1<<30);
+    double throughput = (((bank_util - last_bank_util)/double(HC.cycles_per_heartbeat)) * (double)(uint64_t(m_dram->m_timing_vals("rate")/2)*1e6)) / double(1<<30);
+    double cum_throughput = (((bank_util)/double(HC.total_cycles)) * (double)(uint64_t(m_dram->m_timing_vals("rate")/2)*1e6)) / double(1<<30);
     printf("Heartbeat DRAM Throughput: %.3fGiB/s Cumulative Throughput: %.3fGiB/s Row Buffer Hit Rate: %.3f Cumulative Row Buffer Hit Rate: %.3f\n",throughput,cum_throughput,hit_rate,cum_hit_rate);
     last_bank_util = bank_util;
     last_rb_hits = rb_hits;
