@@ -16,8 +16,8 @@ MemorySystem:
     impl: DDR4
     org:
       preset: DDR4_4Gb_x8
-      channel: 1
-      rank: 1
+      channel: 2
+      rank: 2
     timing:
       preset: DDR4_3200W
 

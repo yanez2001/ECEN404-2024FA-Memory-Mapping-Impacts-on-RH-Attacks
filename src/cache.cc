@@ -22,6 +22,7 @@
 #include <iomanip>
 #include <numeric>
 #include <fmt/core.h>
+#include <iostream>
 
 #include "bandwidth.h"
 #include "champsim.h"
@@ -427,6 +428,14 @@ long CACHE::operate()
   auto hits_end = std::stable_partition(tag_check_ready_begin, tag_check_ready_end, [this](const auto& pkt) { return this->try_hit(pkt); });
   auto finish_tag_check_end = std::stable_partition(hits_end, tag_check_ready_end, do_handle_miss);
   tag_check_bw.consume(std::distance(tag_check_ready_begin, finish_tag_check_end));
+
+  //L1D log
+  if(NAME == "cpu0_L1D")
+  {
+    for(auto it = tag_check_ready_begin; it != finish_tag_check_end; it++)
+    std::cout << "L1D_LOG " << std::hex << it->v_address << " " << it->address << " " << std::dec << " " << current_time.time_since_epoch().count() << std::endl;
+  }
+
   inflight_tag_check.erase(tag_check_ready_begin, finish_tag_check_end);
 
   impl_prefetcher_cycle_operate();

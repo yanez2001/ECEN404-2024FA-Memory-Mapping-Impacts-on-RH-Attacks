@@ -71,7 +71,7 @@
     },
 
     "L2C": {
-        "sets": 1024,
+        "sets": 2048,
         "ways": 8,
         "rq_size": 32,
         "wq_size": 32,
@@ -142,7 +142,7 @@
 
     "LLC": {
         "frequency": 4000,
-        "sets": 2048,
+        "sets": 16384,
         "ways": 16,
         "rq_size": 32,
         "wq_size": 32,
@@ -159,10 +159,11 @@
     },
 
     "physical_memory": {
-    	"model": "champsim",
+    	"model": "ramulator",
+	"ramulator_config": "ramulator.yaml",
         "frequency": 3200,
-        "channels": 1,
-        "ranks": 1,
+        "channels": 2,
+        "ranks": 2,
         "banks": 8,
         "rows": 65536,
         "columns": 128,
