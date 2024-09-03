@@ -681,8 +681,8 @@ if (type == (uint8_t) access_type::PREFETCH) return metadata_in; // there are in
   if (!cache_hit) // This is a miss
   {
 
-    latencyt_L1D[cpu]->add(line_addr, ip, false, current_cycle); // Add @ to latency
-    historyt_L1D[cpu]->add(ip, line_addr, current_cycle); // Add to the table
+    latencyt_L1D[cpu]->add(line_addr, ip, false, current_cycle()); // Add @ to latency
+    historyt_L1D[cpu]->add(ip, line_addr, current_cycle()); // Add to the table
   } else if (cache_hit && scache_L1D[cpu]->is_pf(line_addr)) // Hit bc prefetch
   {
 
@@ -692,9 +692,9 @@ if (type == (uint8_t) access_type::PREFETCH) return metadata_in; // there are in
 
     if (latency > LAT_MASK) latency = 0;
 
-    berti_L1D[cpu]->find_and_update(latency, ip, current_cycle & TIME_MASK, line_addr, cpu);
+    berti_L1D[cpu]->find_and_update(latency, ip, current_cycle() & TIME_MASK, line_addr, cpu);
 
-    historyt_L1D[cpu]->add(ip, line_addr, current_cycle & TIME_MASK);
+    historyt_L1D[cpu]->add(ip, line_addr, current_cycle() & TIME_MASK);
   } else
   {
 
@@ -741,7 +741,7 @@ if (type == (uint8_t) access_type::PREFETCH) return metadata_in; // there are in
         if (!scache_L1D[cpu]->get(p_b_addr))
         {
           ++num_load;
-          latencyt_L1D[cpu]->add(p_b_addr, ip, true, current_cycle);
+          latencyt_L1D[cpu]->add(p_b_addr, ip, true, current_cycle());
         }
       }
     }
@@ -759,8 +759,8 @@ uint32_t CACHE::prefetcher_cache_fill(uint64_t addr, uint32_t set,
   uint64_t latency = 0;
 
 
-  if (cycle != 0 && ((current_cycle & TIME_MASK) > cycle))
-    latency = (current_cycle & TIME_MASK) - cycle;
+  if (cycle != 0 && ((current_cycle() & TIME_MASK) > cycle))
+    latency = (current_cycle() & TIME_MASK) - cycle;
 
   if (latency > LAT_MASK)
   {

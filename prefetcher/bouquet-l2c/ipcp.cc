@@ -42,8 +42,8 @@ class IP_TRACKER {
     };
 };
 
-static uint32_t spec_nl_l2[NUM_CPUS] = {0};
-static IP_TRACKER trackers[NUM_CPUS][NUM_IP_TABLE_L2_ENTRIES];
+static uint32_t* spec_nl_l2 = new uint32_t[NUM_CPUS]{0};
+static auto trackers = new IP_TRACKER[NUM_CPUS][NUM_IP_TABLE_L2_ENTRIES];
 
 int decode_stride(uint32_t metadata){
     int stride=0;

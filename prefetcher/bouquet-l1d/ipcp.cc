@@ -12,6 +12,7 @@ Biswabandan Panda - biswap@cse.iitk.ac.in
 #include "cache.h"
 #include <iostream>
 
+
 #define NUM_IP_TABLE_L1_ENTRIES 1024                        // IP table entries 
 #define NUM_GHB_ENTRIES 16                                  // Entries in the GHB
 #define NUM_IP_INDEX_BITS 10                                // Bits to index into the IP table 
@@ -67,13 +68,13 @@ public:
 };
 
 
-IP_TABLE_L1 trackers_l1[NUM_CPUS][NUM_IP_TABLE_L1_ENTRIES];
-DELTA_PRED_TABLE DPT_l1[NUM_CPUS][4096];
-uint64_t ghb_l1[NUM_CPUS][NUM_GHB_ENTRIES];
-uint64_t prev_cpu_cycle[NUM_CPUS];
-uint64_t num_misses[NUM_CPUS];
-float mpkc[NUM_CPUS] = {0};
-int spec_nl[NUM_CPUS] = {0};
+auto trackers_l1 = new IP_TABLE_L1[NUM_CPUS][NUM_IP_TABLE_L1_ENTRIES];
+auto DPT_l1 = new DELTA_PRED_TABLE[NUM_CPUS][4096];
+auto ghb_l1 = new uint64_t[NUM_CPUS][NUM_GHB_ENTRIES];
+auto prev_cpu_cycle = new uint64_t[NUM_CPUS];
+auto num_misses = new uint64_t[NUM_CPUS];
+float* mpkc = new float[NUM_CPUS]{0};
+int* spec_nl = new int[NUM_CPUS]{0};
 
 
 /***************Updating the signature*************************************/ 
@@ -207,8 +208,8 @@ if(cache_hit == 0)
 
 // update spec nl bit when num misses crosses certain threshold
 if(num_misses[cpu] == 256){
-    mpkc[cpu] = ((float) num_misses[cpu]/(current_cycle-prev_cpu_cycle[cpu]))*1000;
-    prev_cpu_cycle[cpu] = current_cycle;
+    mpkc[cpu] = ((float) num_misses[cpu]/(current_cycle()-prev_cpu_cycle[cpu]))*1000;
+    prev_cpu_cycle[cpu] = current_cycle();
     if(mpkc[cpu] > spec_nl_threshold)
         spec_nl[cpu] = 0;
     else
