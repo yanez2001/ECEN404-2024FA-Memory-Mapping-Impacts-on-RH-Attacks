@@ -9,8 +9,8 @@
     "liblzma",
     "zlib",
     "catch2",
-    "spdlog",
     "argparse",
+    "spdlog",
     "yaml-cpp"
   ]
 }

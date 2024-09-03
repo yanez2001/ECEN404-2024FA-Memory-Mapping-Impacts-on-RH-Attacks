@@ -51,7 +51,7 @@
         "prefetch_as_load": false,
         "virtual_prefetch": true,
         "prefetch_activate": "LOAD,PREFETCH",
-        "prefetcher": "no_instr"
+        "prefetcher": "no"
     },
 
     "L1D": {
@@ -159,8 +159,7 @@
     },
 
     "physical_memory": {
-    	"model": "ramulator",
-	"ramulator_config": "ramulator.yaml",
+    	"model": "integrated",
         "frequency": 3200,
         "channels": 1,
         "ranks": 2,
@@ -173,7 +172,9 @@
         "tRP": 12.5,
         "tRCD": 12.5,
         "tCAS": 12.5,
-        "turn_around_time": 7.5
+        "turn_around_time": 7.5,
+        "refresh_period": 64,
+        "rows_per_refresh": 8
     },
 
     "virtual_memory": {
