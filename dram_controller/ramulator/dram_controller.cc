@@ -623,4 +623,3 @@ void MEMORY_CONTROLLER::print_deadlock()
 }
 // LCOV_EXCL_STOP
 
-

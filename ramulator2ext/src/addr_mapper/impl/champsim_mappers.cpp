@@ -207,7 +207,7 @@ namespace Ramulator{
 
         //retrieve the number of bits for the level currently in
         int num_bits = m_addr_bits[level];
-        fmt::print("The number of bits in this level is: {}\n", std::cout << std::hex << num_bits);
+        fmt::print("The number of bits in this level is: {}\n", num_bits);
         std::cout << "The number of bits in this level is: " << num_bits << "\n";
         //initialize level_addr to hold the randomized address bits for current level
         Addr_t level_addr = 0;
@@ -232,7 +232,7 @@ namespace Ramulator{
 
         //store the result of RASL to the corresponding level
         req.addr_vec[level] = level_addr;
-        fmt::print("This is the vector mapped back: {}\n", req.addr_vec);
+        //fmt::print("This is the vector mapped back: {}\n", addr_vec);
 
         //prepare 'addr' for the next level by shifting out the bits we've just proccessed
         addr >> num_bits;
