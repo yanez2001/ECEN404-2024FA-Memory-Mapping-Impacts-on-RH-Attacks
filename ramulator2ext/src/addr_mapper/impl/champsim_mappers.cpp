@@ -157,6 +157,7 @@ namespace Ramulator{
 
     int m_num_levels = -1;          // How many levels in the hierarchy?
     std::vector<int> m_addr_bits;   // How many address bits for each level in the hierarchy?
+
     Addr_t m_tx_offset = -1;
 
     int m_col_bits_idx = -1;
@@ -171,9 +172,11 @@ namespace Ramulator{
 
       // count the num of levels in our hierarchy
       m_num_levels = count.size();
+
       m_addr_bits.resize(m_num_levels);
       for (size_t level = 0; level < m_addr_bits.size(); level++) {
         m_addr_bits[level] = calc_log2(count[level]);
+        std::cout << "This is the number of bits in [" << level << "]: " << m_addr_bits[level] << std::endl; 
       }
 
       // Last (Column) address have the granularity of the prefetch size
@@ -200,19 +203,47 @@ namespace Ramulator{
       //shift the original address to the right by offset bits.
       Addr_t addr = req.addr >> m_tx_offset;
 
+      //channel
+      req.addr_vec[m_dram->m_levels("channel")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("channel")]);
+      std::cout << "This is the current address of the channel: 0x" << std::hex << req.addr_vec[m_dram->m_levels("channel")] << std::endl;
+
+      //bank group
+      if(m_dram->m_organization.count.size() > 5)
+      req.addr_vec[m_dram->m_levels("bankgroup")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("bankgroup")]);
+      std::cout << "This is the current address of the bankgroup: 0x" << std::hex << req.addr_vec[m_dram->m_levels("bankgroup")] << std::endl;
+
+      //bank
+      req.addr_vec[m_dram->m_levels("bank")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("bank")]);
+      std::cout << "This is the current address of the bank: 0x" << std::hex << req.addr_vec[m_dram->m_levels("bank")] << std::endl;
+
+      //column
+      req.addr_vec[m_dram->m_levels("column")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("column")]);
+      std::cout << "This is the current address of the column: 0x" << std::hex << req.addr_vec[m_dram->m_levels("column")] << std::endl;
+
+      //rank
+      req.addr_vec[m_dram->m_levels("rank")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("rank")]);
+      std::cout << "This is the current address of the rank: 0x" << std::hex << req.addr_vec[m_dram->m_levels("rank")] << std::endl;
+
+      //row
+      req.addr_vec[m_dram->m_levels("row")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("row")]);
+      std::cout << "This is the current address of the row: 0x" << std::hex << req.addr_vec[m_dram->m_levels("row")] << std::endl;
+
+      std::cout << std::endl;
+
       // Generate random address bits for each level (iterate each level)
       for(size_t level = 0; level < m_addr_bits.size(); level++){
 
-       fmt::print("I'm in index {} of the address vector\n", level);
-
         //retrieve the number of bits for the level currently in
         int num_bits = m_addr_bits[level];
-        fmt::print("The number of bits in this level is: {}\n", num_bits);
-        std::cout << "The number of bits in this level is: " << num_bits << "\n";
-        //initialize level_addr to hold the randomized address bits for current level
-        Addr_t level_addr = 0;
+        //fmt::print("The number of bits in this level is: {}\n", num_bits);
+        std::cout << "The number of bits in this level is: 0x" << std::hex << num_bits << std::endl;
+      
+        //initialize rasl_addr to hold the randomized address bits for current level
+        Addr_t rasl_addr = 0;
 
         // loop each bit of the address level currently in to extract
+        //fmt::print("This is the current address bit before RASL: {}\n", req.addr_vec[level]);
+        std::cout << "This is the current address bit before RASL: 0x" << std::hex << req.addr_vec[level] << std::endl;
         for(int bit = 0;bit < num_bits; bit++){
           //extract the bit at 'bit position, then shift addr right by that 'bit'
           // bitwise 1 is to isolate the single bit at that position
@@ -221,18 +252,20 @@ namespace Ramulator{
           //place the extracted bit in a new, shuffled position
           //add 3 bits to the current bit position and check if new position is within available bits for current level
           int new_position = (bit + 3) % num_bits;
-          //place the extracted bit in level_addr. Shift the extracted bit left by new_position and bitwise OR with
-          //level_addr to combine with previous bits
-          level_addr |= (extracted_bit << new_position);
+          //place the extracted bit in rasl_addr. Shift the extracted bit left by new_position and bitwise OR with
+          //rasl_addr to combine with previous bits
+          rasl_addr |= (extracted_bit << new_position);
 
-          fmt::print("This is the vector changed: {}\n", level_addr);
-          std::cout << std::hex << "This is the vector randomized: " << level_addr << "\n";
+          //fmt::print("This is the vector changed: {}\n", rasl_addr);
+         // std::cout << std::hex << "This is the vector randomized: " << rasl_addr << "\n";
         }
-        fmt::print("This is the vector changed: {}\n", level_addr);
+        //fmt::print("This is the vector after RASL: {}\n", rasl_addr);
 
+        std::cout << "This is the vector after RASL: " << std::hex << "0x" << rasl_addr << std::endl;
+    
         //store the result of RASL to the corresponding level
-        req.addr_vec[level] = level_addr;
-        //fmt::print("This is the vector mapped back: {}\n", addr_vec);
+        req.addr_vec[level] = rasl_addr;
+        std::cout << "This is thhe vector mapped back: req.addr_vec[" << level << "] = 0x" << rasl_addr << ";" << std::endl;
 
         //prepare 'addr' for the next level by shifting out the bits we've just proccessed
         addr >> num_bits;
