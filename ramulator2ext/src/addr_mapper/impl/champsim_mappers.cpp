@@ -172,6 +172,7 @@ namespace Ramulator{
 
       // count the num of levels in our hierarchy
       m_num_levels = count.size();
+      std::cout << "The number of levels in our hierarchy: " << m_num_levels << std::endl;
 
       m_addr_bits.resize(m_num_levels);
       for (size_t level = 0; level < m_addr_bits.size(); level++) {
@@ -231,46 +232,40 @@ namespace Ramulator{
       std::cout << std::endl;
 
       // Generate random address bits for each level (iterate each level)
-      for(size_t level = 0; level < m_addr_bits.size(); level++){
+      for(size_t level = 0; level < m_num_levels; level++){
 
         //retrieve the number of bits for the level currently in
         int num_bits = m_addr_bits[level];
-        //fmt::print("The number of bits in this level is: {}\n", num_bits);
-        std::cout << "The number of bits in this level is: 0x" << std::hex << num_bits << std::endl;
+        std::cout << "The number of bits in this level is: " << num_bits << std::endl;
       
         //initialize rasl_addr to hold the randomized address bits for current level
         Addr_t rasl_addr = 0;
 
         // loop each bit of the address level currently in to extract
-        //fmt::print("This is the current address bit before RASL: {}\n", req.addr_vec[level]);
         std::cout << "This is the current address bit before RASL: 0x" << std::hex << req.addr_vec[level] << std::endl;
         for(int bit = 0;bit < num_bits; bit++){
           //extract the bit at 'bit position, then shift addr right by that 'bit'
           // bitwise 1 is to isolate the single bit at that position
-
-          Addr_t extracted_bit = (addr >> bit) & 1;
+          Addr_t extracted_bit = (req.addr_vec[level] >> bit) & 1;
           //place the extracted bit in a new, shuffled position
           //add 3 bits to the current bit position and check if new position is within available bits for current level
           int new_position = (bit + 3) % num_bits;
           //place the extracted bit in rasl_addr. Shift the extracted bit left by new_position and bitwise OR with
           //rasl_addr to combine with previous bits
           rasl_addr |= (extracted_bit << new_position);
-
-          //fmt::print("This is the vector changed: {}\n", rasl_addr);
-         // std::cout << std::hex << "This is the vector randomized: " << rasl_addr << "\n";
         }
-        //fmt::print("This is the vector after RASL: {}\n", rasl_addr);
 
         std::cout << "This is the vector after RASL: " << std::hex << "0x" << rasl_addr << std::endl;
     
         //store the result of RASL to the corresponding level
         req.addr_vec[level] = rasl_addr;
-        std::cout << "This is thhe vector mapped back: req.addr_vec[" << level << "] = 0x" << rasl_addr << ";" << std::endl;
+        std::cout << "This is the vector mapped back: req.addr_vec[" << level << "] = 0x" << rasl_addr << ";" << std::endl;
 
         //prepare 'addr' for the next level by shifting out the bits we've just proccessed
         addr >> num_bits;
+        std::cout << std::endl;
       }
-      
+      std::cout << std::endl;
       // Write back to check if RASL is correct
     }
     
