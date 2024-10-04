@@ -231,6 +231,9 @@ namespace Ramulator{
 
       std::cout << std::endl;
 
+      // initialize xor result to hold power consumption for each level
+      Addr_t xor_result_power = 0;
+
       // Generate random address bits for each level (iterate each level)
       for(size_t level = 0; level < m_num_levels; level++){
 
@@ -254,19 +257,22 @@ namespace Ramulator{
           //rasl_addr to combine with previous bits
           rasl_addr |= (extracted_bit << new_position);
         }
-
+        // power consumption result for each level
+        xor_result_power = req.addr_vec[level] ^ rasl_addr;
+      
         std::cout << "This is the vector after RASL: " << std::hex << "0x" << rasl_addr << std::endl;
     
         //store the result of RASL to the corresponding level
         req.addr_vec[level] = rasl_addr;
         std::cout << "This is the vector mapped back: req.addr_vec[" << level << "] = 0x" << rasl_addr << ";" << std::endl;
+        std::cout << "This is the power consumption at level " << level << ": 0x" << xor_result_power << std::endl;
 
         //prepare 'addr' for the next level by shifting out the bits we've just proccessed
         addr >> num_bits;
         std::cout << std::endl;
       }
       std::cout << std::endl;
-      // Write back to check if RASL is correct
+      //std::cout << xor_result_power << std::endl;
     }
     
   };
