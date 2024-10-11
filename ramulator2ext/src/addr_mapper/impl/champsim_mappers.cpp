@@ -1,4 +1,5 @@
 #include <vector>
+#include <bitset>
 
 #include "base/base.h"
 #include "dram/dram.h"
@@ -195,8 +196,15 @@ namespace Ramulator{
 
       // Assume column is always the last level
       m_col_bits_idx = m_num_levels - 1;
+
+      //tot power
+      std::vector<Addr_t> tot_power; 
     }
 
+    // initialize bit counter
+    int bit_counter = 0;
+    int num_bits_pc = 0;
+    
     void apply(Request& req) override {
       // initialize addr_vec and resize to match the number of levels in the DRAM hierarchy
       req.addr_vec.resize(m_num_levels, -1);
@@ -234,6 +242,9 @@ namespace Ramulator{
       // initialize xor result to hold power consumption for each level
       Addr_t xor_result_power = 0;
 
+      // initialize power_cons to hold the bit changes for each level
+      std::vector<Addr_t> power_vector;
+
       // Generate random address bits for each level (iterate each level)
       for(size_t level = 0; level < m_num_levels; level++){
 
@@ -259,6 +270,9 @@ namespace Ramulator{
         }
         // power consumption result for each level
         xor_result_power = req.addr_vec[level] ^ rasl_addr;
+
+        // store xor_result into power_vector
+        power_vector.push_back(xor_result_power);
       
         std::cout << "This is the vector after RASL: " << std::hex << "0x" << rasl_addr << std::endl;
     
@@ -270,10 +284,38 @@ namespace Ramulator{
         //prepare 'addr' for the next level by shifting out the bits we've just proccessed
         addr >> num_bits;
         std::cout << std::endl;
+
+        // power consumption -----------------------------------------------------------------------------
+        int bit_one_counter = 0;
+        
+        // convert to binary
+        std::bitset<64> binary_representation(xor_result_power);
+
+        // check if binary representation is correct
+        std::string binary_str = binary_representation.to_string().substr(64-num_bits);
+        std::cout << "Power consumption vector in binary: " << binary_str << std::endl;
+
+        // count the total number of 1 bits
+        for (char bit : binary_str){
+          if (bit == '1'){
+            bit_one_counter += 1;
+          }
+        }
+
+        bit_counter = bit_one_counter + bit_counter;
+        num_bits_pc = num_bits + num_bits_pc;
+
+        std::cout << "Bit 1 counts: " << bit_one_counter << std::endl;
+        std::cout << "Total bits: " << num_bits << std::endl;
+        std::cout << std::endl;
       }
       std::cout << std::endl;
-      //std::cout << xor_result_power << std::endl;
+      std::cout << "The total number of '1' is: " << std::dec << bit_counter << std::endl;
+      std::cout << "The total number of bits is: " << std::dec << num_bits_pc << std::endl; 
+      // I need to fix this and convert the hex values into decimal so i can get an accurate pc rate.
+      std::cout << "The power consumption rate: " << std::dec << (bit_counter / num_bits_pc) * 100 << std::endl;  
     }
     
+
   };
 }
