@@ -173,12 +173,12 @@ namespace Ramulator{
 
       // count the num of levels in our hierarchy
       m_num_levels = count.size();
-      std::cout << "The number of levels in our hierarchy: " << m_num_levels << std::endl;
+       //std::cout << "The number of levels in our hierarchy: " << m_num_levels << std::endl;
 
       m_addr_bits.resize(m_num_levels);
       for (size_t level = 0; level < m_addr_bits.size(); level++) {
         m_addr_bits[level] = calc_log2(count[level]);
-        std::cout << "This is the number of bits in [" << level << "]: " << m_addr_bits[level] << std::endl; 
+        //std::cout << "This is the number of bits in [" << level << "]: " << m_addr_bits[level] << std::endl; 
       }
 
       // Last (Column) address have the granularity of the prefetch size
@@ -214,28 +214,28 @@ namespace Ramulator{
 
       //channel
       req.addr_vec[m_dram->m_levels("channel")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("channel")]);
-      std::cout << "This is the current address of the channel: 0x" << std::hex << req.addr_vec[m_dram->m_levels("channel")] << std::endl;
+      //std::cout << "This is the current address of the channel: 0x" << std::hex << req.addr_vec[m_dram->m_levels("channel")] << std::endl;
 
       //bank group
       if(m_dram->m_organization.count.size() > 5)
       req.addr_vec[m_dram->m_levels("bankgroup")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("bankgroup")]);
-      std::cout << "This is the current address of the bankgroup: 0x" << std::hex << req.addr_vec[m_dram->m_levels("bankgroup")] << std::endl;
+      //std::cout << "This is the current address of the bankgroup: 0x" << std::hex << req.addr_vec[m_dram->m_levels("bankgroup")] << std::endl;
 
       //bank
       req.addr_vec[m_dram->m_levels("bank")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("bank")]);
-      std::cout << "This is the current address of the bank: 0x" << std::hex << req.addr_vec[m_dram->m_levels("bank")] << std::endl;
+      //std::cout << "This is the current address of the bank: 0x" << std::hex << req.addr_vec[m_dram->m_levels("bank")] << std::endl;
 
       //column
       req.addr_vec[m_dram->m_levels("column")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("column")]);
-      std::cout << "This is the current address of the column: 0x" << std::hex << req.addr_vec[m_dram->m_levels("column")] << std::endl;
+      //std::cout << "This is the current address of the column: 0x" << std::hex << req.addr_vec[m_dram->m_levels("column")] << std::endl;
 
       //rank
       req.addr_vec[m_dram->m_levels("rank")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("rank")]);
-      std::cout << "This is the current address of the rank: 0x" << std::hex << req.addr_vec[m_dram->m_levels("rank")] << std::endl;
+      //std::cout << "This is the current address of the rank: 0x" << std::hex << req.addr_vec[m_dram->m_levels("rank")] << std::endl;
 
       //row
       req.addr_vec[m_dram->m_levels("row")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("row")]);
-      std::cout << "This is the current address of the row: 0x" << std::hex << req.addr_vec[m_dram->m_levels("row")] << std::endl;
+      //std::cout << "This is the current address of the row: 0x" << std::hex << req.addr_vec[m_dram->m_levels("row")] << std::endl;
 
       std::cout << std::endl;
 
@@ -250,13 +250,13 @@ namespace Ramulator{
 
         //retrieve the number of bits for the level currently in
         int num_bits = m_addr_bits[level];
-        std::cout << "The number of bits in this level is: " << num_bits << std::endl;
+        //std::cout << "The number of bits in this level is: " << num_bits << std::endl;
       
         //initialize rasl_addr to hold the randomized address bits for current level
         Addr_t rasl_addr = 0;
 
         // loop each bit of the address level currently in to extract
-        std::cout << "This is the current address bit before RASL: 0x" << std::hex << req.addr_vec[level] << std::endl;
+        //std::cout << "This is the current address bit before RASL: 0x" << std::hex << req.addr_vec[level] << std::endl;
         for(int bit = 0;bit < num_bits; bit++){
           //extract the bit at 'bit position, then shift addr right by that 'bit'
           // bitwise 1 is to isolate the single bit at that position
@@ -274,16 +274,16 @@ namespace Ramulator{
         // store xor_result into power_vector
         power_vector.push_back(xor_result_power);
       
-        std::cout << "This is the vector after RASL: " << std::hex << "0x" << rasl_addr << std::endl;
+        //std::cout << "This is the vector after RASL: " << std::hex << "0x" << rasl_addr << std::endl;
     
         //store the result of RASL to the corresponding level
         req.addr_vec[level] = rasl_addr;
-        std::cout << "This is the vector mapped back: req.addr_vec[" << level << "] = 0x" << rasl_addr << ";" << std::endl;
-        std::cout << "This is the power consumption at level " << level << ": 0x" << xor_result_power << std::endl;
+        //std::cout << "This is the vector mapped back: req.addr_vec[" << level << "] = 0x" << rasl_addr << ";" << std::endl;
+        //std::cout << "This is the power consumption at level " << level << ": 0x" << xor_result_power << std::endl;
 
         //prepare 'addr' for the next level by shifting out the bits we've just proccessed
         addr >> num_bits;
-        std::cout << std::endl;
+        //std::cout << std::endl;
 
         // power consumption -----------------------------------------------------------------------------
         int bit_one_counter = 0;
@@ -293,7 +293,7 @@ namespace Ramulator{
 
         // check if binary representation is correct
         std::string binary_str = binary_representation.to_string().substr(64-num_bits);
-        std::cout << "Power consumption vector in binary: " << binary_str << std::endl;
+        //std::cout << "Power consumption vector in binary: " << binary_str << std::endl;
 
         // count the total number of 1 bits
         for (char bit : binary_str){
@@ -305,15 +305,17 @@ namespace Ramulator{
         bit_counter = bit_one_counter + bit_counter;
         num_bits_pc = num_bits + num_bits_pc;
 
-        std::cout << "Bit 1 counts: " << bit_one_counter << std::endl;
-        std::cout << "Total bits: " << num_bits << std::endl;
-        std::cout << std::endl;
+        //std::cout << "Bit 1 counts: " << bit_one_counter << std::endl;
+        //std::cout << "Total bits: " << num_bits << std::endl;
+        //std::cout << std::endl;
       }
-      std::cout << std::endl;
-      std::cout << "The total number of '1' is: " << std::dec << bit_counter << std::endl;
-      std::cout << "The total number of bits is: " << std::dec << num_bits_pc << std::endl; 
+      //std::cout << std::endl;
+      // Cast to float for proper decimal division
+      double power_consumption_rate = (static_cast<double>(bit_counter) / static_cast<double>(num_bits_pc)) * 100;
+      //std::cout << "The total number of '1' is: " << std::dec << bit_counter << std::endl;
+      //std::cout << "The total number of bits is: " << std::dec << num_bits_pc << std::endl; 
       // I need to fix this and convert the hex values into decimal so i can get an accurate pc rate.
-      std::cout << "The power consumption rate: " << std::dec << (bit_counter / num_bits_pc) * 100 << std::endl;  
+      std::cout << "The power consumption rate: " << std::dec << power_consumption_rate << "%" << std::endl << std::endl;  
     }
     
 
