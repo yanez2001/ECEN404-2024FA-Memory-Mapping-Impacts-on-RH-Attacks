@@ -93,6 +93,12 @@ namespace Ramulator{
     int m_col_bits_idx = -1;
     int m_row_bits_idx = -1;
 
+    // store the previous address vector
+    std::vector<Addr_t> m_prev_addr_vec;
+
+    // make a vector to store power consumption rates
+    std::vector<double> power_consumption_rates;
+
     void init() override { };
     void setup(IFrontEnd* frontend, IMemorySystem* memory_system) {
       m_dram = memory_system->get_ifce<IDRAM>();
@@ -103,7 +109,7 @@ namespace Ramulator{
       m_addr_bits.resize(m_num_levels);
       for (size_t level = 0; level < m_addr_bits.size(); level++) {
         m_addr_bits[level] = calc_log2(count[level]);
-        std::cout << "This is the number of bits in level [" << level << "]: " << m_addr_bits[level] << std::endl;
+        //std::cout << "This is the number of bits in level [" << level << "]: " << m_addr_bits[level] << std::endl;
       }
 
       // Last (Column) address have the granularity of the prefetch size
@@ -121,54 +127,121 @@ namespace Ramulator{
 
       // Assume column is always the last level
       m_col_bits_idx = m_num_levels - 1;
-    }
 
+      //tot power
+      std::vector<Addr_t> tot_power; 
+
+      // initialize the previous address vector with the same size
+      m_prev_addr_vec.assign(m_num_levels, 0);
+    }
+    
+    // initialize bit counter
+    int bit_counter = 0;
+    int num_bits_pc = 0;
 
     void apply(Request& req) override {
       req.addr_vec.resize(m_num_levels, -1);
 
+      // initialize xor result to hold power consumption for each level
+      Addr_t xor_result_power = 0;
+
+      // initialize power_cons to hold the bit changes for each level
+      std::vector<Addr_t> power_vector;
+
+      //retrieve the number of bits for the level currently in
+      int num_bits = m_addr_bits.size();
+
       Addr_t col1_bits = 12 - m_tx_offset - m_addr_bits[m_dram->m_levels("bankgroup")] - m_addr_bits[m_dram->m_levels("bank")] - m_addr_bits[m_dram->m_levels("channel")];
-      std::cout << "The number of col1_bits [" << col1_bits << "]." << std::endl;
+      //std::cout << "The number of col1_bits [" << col1_bits << "]." << std::endl;
       Addr_t col2_bits = m_addr_bits[m_dram->m_levels("column")] - col1_bits;
-      std::cout << "The number of col2_bits [" << col2_bits << "]." << std::endl;
+      //std::cout << "The number of col2_bits [" << col2_bits << "]." << std::endl;
       Addr_t addr = req.addr >> m_tx_offset;
-      std::cout << "The address is: " << addr << std::endl;
+      //std::cout << "The address is: " << addr << std::endl;
       Addr_t xor_bits = req.addr >> 17;
-      std::cout << "The xor_bits being used: " << xor_bits << std::endl;
+      //std::cout << "The xor_bits being used: " << xor_bits << std::endl;
 
       //channel
       req.addr_vec[m_dram->m_levels("channel")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("channel")]);
-      std::cout << "The channel address is: " << req.addr_vec[m_dram->m_levels("channel")] << std::endl;
+      //std::cout << "The channel address is: " << req.addr_vec[m_dram->m_levels("channel")] << std::endl;
       //col 1
       req.addr_vec[m_dram->m_levels("column")] = slice_lower_bits(addr, col1_bits);
-      std::cout << "The column address is: " << req.addr_vec[m_dram->m_levels("column")] << std::endl;
+      //std::cout << "The column address is: " << req.addr_vec[m_dram->m_levels("column")] << std::endl;
       //bank group and bank
       if(m_dram->m_organization.count.size() > 5)
       {
         int bankgroup_val = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("bankgroup")]) ^ xor_bits;
         req.addr_vec[m_dram->m_levels("bankgroup")] = slice_lower_bits(bankgroup_val, m_addr_bits[m_dram->m_levels("bankgroup")]);
-        std::cout << "After count > 5, bankgroup size is: " << req.addr_vec[m_dram->m_levels("bankgroup")] << std::endl;
+        //std::cout << "After count > 5, bankgroup size is: " << req.addr_vec[m_dram->m_levels("bankgroup")] << std::endl;
 
         int bank_val = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("bank")]) ^ (xor_bits >> m_addr_bits[m_dram->m_levels("bankgroup")]);
         req.addr_vec[m_dram->m_levels("bank")] = slice_lower_bits(bank_val,m_addr_bits[m_dram->m_levels("bank")]);
-        std::cout << "After count > 5, bank size is: " << req.addr_vec[m_dram->m_levels("bank")] << std::endl;
+        //std::cout << "After count > 5, bank size is: " << req.addr_vec[m_dram->m_levels("bank")] << std::endl;
       }
       else
       {
         int bank_val = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("bank")]) ^ xor_bits;
         req.addr_vec[m_dram->m_levels("bank")] = slice_lower_bits(bank_val, m_addr_bits[m_dram->m_levels("bank")]);
-        std::cout << "The bankgroup size is: " << req.addr_vec[m_dram->m_levels("bank")] << std::endl;
+        //std::cout << "The bankgroup size is: " << req.addr_vec[m_dram->m_levels("bank")] << std::endl;
       }
       //col 2
       req.addr_vec[m_dram->m_levels("column")] += slice_lower_bits(addr, col2_bits) << col1_bits;
-      std::cout << "The column bits is: " << req.addr_vec[m_dram->m_levels("column")] << std::endl;
+      //std::cout << "The column bits is: " << req.addr_vec[m_dram->m_levels("column")] << std::endl;
       //rank
       req.addr_vec[m_dram->m_levels("rank")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("rank")]);
-      std::cout << "The rank bits is: " << req.addr_vec[m_dram->m_levels("rank")] << std::endl;
+      //std::cout << "The rank bits is: " << req.addr_vec[m_dram->m_levels("rank")] << std::endl;
       //row
       req.addr_vec[m_dram->m_levels("row")] = slice_lower_bits(addr, m_addr_bits[m_dram->m_levels("row")]);
-      std::cout << "The row address is: " << req.addr_vec[m_dram->m_levels("row")] << std::endl;
-      std::cout << std::endl;
+      //std::cout << "The row address is: " << req.addr_vec[m_dram->m_levels("row")] << std::endl;
+      //std::cout << std::endl;
+
+      // calculate bit changes for power consumption
+      for (size_t i = 0; i < m_num_levels; ++i) {
+        // uncomment for analysis [NOT FOR LONG RUNS]
+        //std::cout << "The current address for level [" << i << "]: " << req.addr_vec[i] << std::endl;
+        //std::cout << "The prev address for level [" << i << "]: " << m_prev_addr_vec[i] << std::endl;
+        xor_result_power |= (req.addr_vec[i] ^ m_prev_addr_vec[i]);
+        //std::cout << "The xor result: " << xor_result_power << std::endl;
+      }
+      //std::cout << std::endl;
+      // store xor_result into power_vector
+      power_vector.push_back(xor_result_power);
+
+
+      // power consumption -----------------------------------------------------------------------------
+        
+      // convert to binary
+      std::bitset<64> binary_representation(xor_result_power);
+
+      // count the number of 1s in the xor result 
+      int bit_transitions = std::bitset<64>(xor_result_power).count();
+
+      //update the total bit counter for transistions and total bits
+      bit_counter += bit_transitions;
+      num_bits_pc += m_addr_bits.size();
+
+      // Cast to float for proper decimal division
+      double power_consumption_rate = (static_cast<double>(bit_counter) / static_cast<double>(num_bits_pc)) * 100;
+
+      // uncomment this for analysis [NOT FOR LONGER RUNS]
+      //std::cout << "The power consumption rate: " << std::dec << power_consumption_rate << "%" << std::endl << std::endl;  
+      power_consumption_rates.push_back(power_consumption_rate);
+
+      m_prev_addr_vec.assign(req.addr_vec.begin(), req.addr_vec.end());
+
+      writePowerConsumptionRatesToFile("power_consumption_rates_PBPI.txt");
+    }
+
+    void writePowerConsumptionRatesToFile(const std::string& filename) const {
+        std::ofstream outFile(filename);  // Open the file for writing
+
+        if (outFile.is_open()) {
+            for (size_t i = 0; i < power_consumption_rates.size(); ++i) {
+                outFile << "Rate for instruction " << i << ": " << power_consumption_rates[i] << "%" << std::endl;
+            }
+            outFile.close();  // Close the file
+        } else {
+            std::cerr << "Unable to open file " << filename << std::endl;
+        }
     }
     
   };
