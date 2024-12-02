@@ -236,7 +236,7 @@ namespace Ramulator{
 
         if (outFile.is_open()) {
             for (size_t i = 0; i < power_consumption_rates.size(); ++i) {
-                outFile << "Rate for instruction " << i << ": " << power_consumption_rates[i] << "%" << std::endl;
+                outFile << "Cumulative Power Consumption: " << power_consumption_rates[i] << "%" << std::endl;
             }
             outFile.close();  // Close the file
         } else {
@@ -245,7 +245,7 @@ namespace Ramulator{
     }
     
   };
-  /****************************************This is where I will apply my method RASL*******************************************/
+  /****************************************This is where I will apply my method RASL - Yanez Saucedo*******************************************/
   class RASL final : public IAddrMapper, public Implementation {
     RAMULATOR_REGISTER_IMPLEMENTATION(IAddrMapper, RASL, "RASL", "Applies a RASL Mapping to the address. Yanez's Scheme.");
     // We will try to increase randomization without using too much power
@@ -419,7 +419,13 @@ namespace Ramulator{
       //std::cout << "The power consumption rate: " << std::dec << power_consumption_rate << "%" << std::endl << std::endl;  
       power_consumption_rates.push_back(power_consumption_rate);
 
-      writePowerConsumptionRatesToFile("power_consumption_rates_rasl.txt");
+      // using this when not using the text file
+      for (size_t p = 0; p < power_consumption_rates.size(); ++p)
+      {
+        std::cout << "power consumption = " << power_consumption_rates[p] << "%" << std::endl;
+      }
+
+      //writePowerConsumptionRatesToFile("power_consumption_rates_rasl.txt");
     }
 
     void writePowerConsumptionRatesToFile(const std::string& filename) const {
@@ -427,7 +433,7 @@ namespace Ramulator{
 
         if (outFile.is_open()) {
             for (size_t i = 0; i < power_consumption_rates.size(); ++i) {
-                outFile << "Rate for instruction " << i << ": " << power_consumption_rates[i] << "%" << std::endl;
+                outFile << "Cumulative Power Consumption: " << power_consumption_rates[i] << "%" << std::endl;
             }
             outFile.close();  // Close the file
         } else {

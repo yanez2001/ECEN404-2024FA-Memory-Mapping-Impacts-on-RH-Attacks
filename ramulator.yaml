@@ -37,4 +37,4 @@ MemorySystem:
                            target_cycle: 0}
 
   AddrMapper:
-    impl: PBPI_Mapping
+    impl: RASL
